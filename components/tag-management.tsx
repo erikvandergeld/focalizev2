@@ -1,9 +1,11 @@
 "use client"
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { PlusCircle, Pencil, Trash2 } from "lucide-react"
+import type React from "react"
+
+import { useState, useEffect } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Button } from "@/components/ui/button"
+import { Pencil, Trash2, Plus, Tag } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -16,44 +18,79 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
 import { ConfirmDialog } from "./confirm-dialog"
-import { Skeleton } from "@/components/ui/skeleton"
-import { useTags } from "@/hooks/use-tags"
-import type { Tag } from "@/types"
+
+// Tipos
+type TagType = {
+  id: string
+  name: string
+  color: string
+  createdAt: string
+}
+
+// Dados iniciais vazios
+const initialTags: TagType[] = []
 
 export function TagManagement() {
-  const { tags, isLoading, addTag, editTag, removeTag } = useTags()
+  const [tags, setTags] = useState<TagType[]>(initialTags)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [selectedTag, setSelectedTag] = useState<Tag | null>(null)
-  const [tagName, setTagName] = useState("")
-  const [tagColor, setTagColor] = useState("#3498db")
+  const [selectedTag, setSelectedTag] = useState<TagType | null>(null)
+  const [formData, setFormData] = useState({
+    name: "",
+    color: "#3B82F6", // Cor padrão azul
+  })
   const { toast } = useToast()
 
+  // Movido para useEffect para evitar acesso ao DOM durante SSR
+  useEffect(() => {
+    const newTagButton = document.getElementById("new-tag-button")
+    if (newTagButton) {
+      const handleClick = () => handleOpenDialog()
+      newTagButton.addEventListener("click", handleClick)
+      return () => {
+        newTagButton.removeEventListener("click", handleClick)
+      }
+    }
+  }, []) // Dependências vazias para executar apenas uma vez na montagem
+
   const resetForm = () => {
-    setTagName("")
-    setTagColor("#3498db")
+    setFormData({
+      name: "",
+      color: "#3B82F6",
+    })
     setSelectedTag(null)
   }
 
-  const handleOpenDialog = (tag?: Tag) => {
+  const handleOpenDialog = (tag?: TagType) => {
     if (tag) {
       setSelectedTag(tag)
-      setTagName(tag.name)
-      setTagColor(tag.color)
+      setFormData({
+        name: tag.name,
+        color: tag.color,
+      })
     } else {
       resetForm()
     }
     setIsDialogOpen(true)
   }
 
-  const handleOpenDeleteDialog = (tag: Tag) => {
+  const handleOpenDeleteDialog = (tag: TagType) => {
     setSelectedTag(tag)
     setIsDeleteDialogOpen(true)
   }
 
-  const handleSubmit = async () => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData((prev) => ({ ...prev, color: e.target.value }))
+  }
+
+  const handleSubmit = () => {
     // Validação
-    if (!tagName.trim()) {
+    if (!formData.name) {
       toast({
         title: "Erro de validação",
         description: "O nome da tag é obrigatório.",
@@ -62,38 +99,66 @@ export function TagManagement() {
       return
     }
 
-    try {
-      if (selectedTag) {
-        // Atualizar tag existente
-        await editTag(selectedTag.id, {
-          name: tagName,
-          color: tagColor,
-        })
-      } else {
-        // Criar nova tag
-        await addTag({
-          name: tagName,
-          color: tagColor,
-        })
+    if (!formData.color) {
+      toast({
+        title: "Erro de validação",
+        description: "Selecione uma cor para a tag.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (selectedTag) {
+      // Atualizar tag existente
+      setTags((prev) =>
+        prev.map((tag) =>
+          tag.id === selectedTag.id
+            ? {
+                ...tag,
+                name: formData.name,
+                color: formData.color,
+              }
+            : tag,
+        ),
+      )
+
+      toast({
+        title: "Tag atualizada",
+        description: `A tag "${formData.name}" foi atualizada com sucesso.`,
+      })
+    } else {
+      // Criar nova tag
+      const newTag: TagType = {
+        id: `tag-${Date.now()}`,
+        name: formData.name,
+        color: formData.color,
+        createdAt: new Date().toISOString(),
       }
 
-      setIsDialogOpen(false)
-      resetForm()
-    } catch (error) {
-      console.error("Erro ao salvar tag:", error)
+      setTags((prev) => [...prev, newTag])
+
+      toast({
+        title: "Tag criada",
+        description: `A tag "${formData.name}" foi criada com sucesso.`,
+      })
     }
+
+    setIsDialogOpen(false)
+    resetForm()
   }
 
-  const handleDeleteTag = async () => {
+  const handleDeleteTag = () => {
     if (!selectedTag) return
 
-    try {
-      await removeTag(selectedTag.id)
-      setIsDeleteDialogOpen(false)
-      setSelectedTag(null)
-    } catch (error) {
-      console.error("Erro ao excluir tag:", error)
-    }
+    setTags((prev) => prev.filter((tag) => tag.id !== selectedTag.id))
+
+    toast({
+      title: "Tag excluída",
+      description: `A tag "${selectedTag.name}" foi excluída com sucesso.`,
+    })
+
+    setIsDeleteDialogOpen(false)
+    setSelectedTag(null)
   }
 
   const formatDate = (dateString: string) => {
@@ -105,26 +170,12 @@ export function TagManagement() {
     }).format(date)
   }
 
-  if (isLoading) {
-    return (
-      <div className="p-6 space-y-4">
-        <div className="flex justify-between items-center mb-6">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-10 w-32" />
-        </div>
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-20 w-full" />
-      </div>
-    )
-  }
-
   return (
-    <div className="p-6">
+    <div>
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-lg font-medium">Gerenciamento de Tags</h3>
         <Button onClick={() => handleOpenDialog()} className="gap-1">
-          <PlusCircle className="h-4 w-4" />
+          <Plus className="h-4 w-4" />
           Nova Tag
         </Button>
       </div>
@@ -140,42 +191,40 @@ export function TagManagement() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {tags.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4} className="h-24 text-center">
-                  Nenhuma tag cadastrada. Clique em "Nova Tag" para adicionar.
+            {tags.map((tag) => (
+              <TableRow key={tag.id}>
+                <TableCell className="font-medium">{tag.name}</TableCell>
+                <TableCell>
+                  <span
+                    className="px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1.5 w-fit"
+                    style={{
+                      backgroundColor: tag.color,
+                      color: "white",
+                    }}
+                  >
+                    <Tag className="h-3 w-3" />
+                    {tag.name}
+                  </span>
+                </TableCell>
+                <TableCell>{formatDate(tag.createdAt)}</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-2">
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(tag)} title="Editar">
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleOpenDeleteDialog(tag)}
+                      className="text-destructive"
+                      title="Excluir"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
-            ) : (
-              tags.map((tag) => (
-                <TableRow key={tag.id}>
-                  <TableCell className="font-medium">{tag.name}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
-                      {tag.color}
-                    </div>
-                  </TableCell>
-                  <TableCell>{formatDate(tag.created_at)}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(tag)} title="Editar">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenDeleteDialog(tag)}
-                        className="text-destructive"
-                        title="Excluir"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
+            ))}
           </TableBody>
         </Table>
       </div>
@@ -193,31 +242,43 @@ export function TagManagement() {
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="name">Nome</Label>
-              <Input
-                id="name"
-                value={tagName}
-                onChange={(e) => setTagName(e.target.value)}
-                placeholder="Digite o nome da tag"
-                required
-              />
+              <Input id="name" name="name" value={formData.name} onChange={handleInputChange} required />
             </div>
+
             <div className="grid gap-2">
               <Label htmlFor="color">Cor</Label>
-              <div className="flex gap-2 items-center">
+              <div className="flex gap-3 items-center">
                 <Input
                   id="color"
+                  name="color"
                   type="color"
-                  value={tagColor}
-                  onChange={(e) => setTagColor(e.target.value)}
-                  className="w-12 h-10 p-1"
+                  value={formData.color}
+                  onChange={handleColorChange}
+                  className="w-12 h-8 p-1 cursor-pointer"
                 />
                 <Input
-                  value={tagColor}
-                  onChange={(e) => setTagColor(e.target.value)}
-                  placeholder="#000000"
-                  className="flex-1"
+                  id="colorHex"
+                  name="colorHex"
+                  value={formData.color}
+                  onChange={handleColorChange}
+                  className="font-mono"
+                  maxLength={7}
                 />
               </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Visualização</Label>
+              <span
+                className="px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1.5 w-fit"
+                style={{
+                  backgroundColor: formData.color,
+                  color: "white",
+                }}
+              >
+                <Tag className="h-3 w-3" />
+                {formData.name || "Nome da tag"}
+              </span>
             </div>
           </div>
 

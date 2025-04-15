@@ -8,12 +8,17 @@ import { Button } from "@/components/ui/button"
 import { Pencil, Trash2, Eye } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ConfirmDialog } from "./confirm-dialog"
-import { useProjects } from "@/hooks/use-projects"
-import { Skeleton } from "@/components/ui/skeleton"
+import { useToast } from "@/components/ui/use-toast"
+import { useNotifications } from "./notification-provider"
+
+// Dados de exemplo
+const projects: any[] = []
 
 export function ProjectList() {
   const router = useRouter()
-  const { projects, isLoading, error, removeProject } = useProjects()
+  const { toast } = useToast()
+  const { addNotification } = useNotifications()
+  const [projectList, setProjectList] = useState(projects)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedProject, setSelectedProject] = useState<any | null>(null)
 
@@ -52,31 +57,23 @@ export function ProjectList() {
     setDeleteDialogOpen(true)
   }
 
-  const handleDeleteProject = async () => {
+  const handleDeleteProject = () => {
     if (!selectedProject) return
 
-    try {
-      await removeProject(selectedProject.id)
-      setDeleteDialogOpen(false)
-      setSelectedProject(null)
-    } catch (error) {
-      console.error("Error deleting project:", error)
-    }
-  }
+    setProjectList((prev) => prev.filter((project) => project.id !== selectedProject.id))
 
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-20 w-full" />
-      </div>
+    toast({
+      title: "Projeto excluído",
+      description: `O projeto "${selectedProject.name}" foi excluído com sucesso.`,
+    })
+
+    addNotification(
+      "Projeto excluído",
+      `O projeto "${selectedProject.name}" para o cliente ${selectedProject.client} foi excluído.`,
     )
-  }
 
-  if (error) {
-    return <div className="text-center text-red-500 p-4">{error}</div>
+    setDeleteDialogOpen(false)
+    setSelectedProject(null)
   }
 
   return (
@@ -86,59 +83,59 @@ export function ProjectList() {
           <TableHeader>
             <TableRow>
               <TableHead>Nome</TableHead>
-              <TableHead>Descrição</TableHead>
+              <TableHead>Entidade</TableHead>
+              <TableHead>Cliente</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Tarefas</TableHead>
               <TableHead>Data de criação</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {projects.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4} className="h-24 text-center">
-                  Nenhum projeto encontrado. Crie seu primeiro projeto!
+            {projectList.map((project) => (
+              <TableRow key={project.id}>
+                <TableCell className="font-medium">{project.name}</TableCell>
+                <TableCell>{project.entity}</TableCell>
+                <TableCell>
+                  <span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
+                    {project.client}
+                  </span>
+                </TableCell>
+                <TableCell>{getStatusBadge(project.status)}</TableCell>
+                <TableCell>
+                  <span className="text-sm">
+                    {project.completedTasks}/{project.tasksCount}
+                  </span>
+                </TableCell>
+                <TableCell>{formatDate(project.createdAt)}</TableCell>
+                <TableCell className="text-right">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm">
+                        Ações
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem className="flex items-center gap-2" onClick={() => handleView(project.id)}>
+                        <Eye className="h-4 w-4" />
+                        <span>Visualizar</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="flex items-center gap-2" onClick={() => handleEdit(project.id)}>
+                        <Pencil className="h-4 w-4" />
+                        <span>Editar</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="flex items-center gap-2 text-destructive"
+                        onClick={() => handleOpenDeleteDialog(project)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span>Excluir</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </TableCell>
               </TableRow>
-            ) : (
-              projects.map((project) => (
-                <TableRow key={project.id}>
-                  <TableCell className="font-medium">{project.name}</TableCell>
-                  <TableCell>{project.description || "-"}</TableCell>
-                  <TableCell>{formatDate(project.created_at)}</TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          Ações
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          className="flex items-center gap-2"
-                          onClick={() => handleView(project.id.toString())}
-                        >
-                          <Eye className="h-4 w-4" />
-                          <span>Visualizar</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="flex items-center gap-2"
-                          onClick={() => handleEdit(project.id.toString())}
-                        >
-                          <Pencil className="h-4 w-4" />
-                          <span>Editar</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="flex items-center gap-2 text-destructive"
-                          onClick={() => handleOpenDeleteDialog(project)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          <span>Excluir</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
+            ))}
           </TableBody>
         </Table>
       </div>

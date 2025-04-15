@@ -1,100 +1,119 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { useRouter } from "next/navigation"
-import { loginUser, registerUser, getCurrentUser, removeToken } from "@/services/auth-service"
-import type { User } from "@/types"
+import type React from "react"
 
-interface AuthContextType {
+import { createContext, useContext, useEffect, useState } from "react"
+
+type User = {
+  id: string
+  name: string
+  email: string
+  isAdmin: boolean
+  disabled: boolean
+}
+
+type AuthContextType = {
   user: User | null
-  isLoading: boolean
-  isAuthenticated: boolean
   login: (email: string, password: string) => Promise<boolean>
   register: (name: string, email: string, password: string) => Promise<boolean>
   logout: () => void
+  isLoading: boolean
 }
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  isLoading: true,
-  isAuthenticated: false,
-  login: async () => false,
-  register: async () => false,
-  logout: () => {},
-})
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const router = useRouter()
 
   useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const currentUser = await getCurrentUser()
-        setUser(currentUser)
-      } catch (error) {
-        console.error("Erro ao carregar usuário:", error)
-        setUser(null)
-      } finally {
-        setIsLoading(false)
+    // Verificar se o usuário está logado ao carregar a página
+    if (typeof window !== "undefined") {
+      const storedUser = localStorage.getItem("user")
+      if (storedUser) {
+        setUser(JSON.parse(storedUser))
       }
+      setIsLoading(false)
     }
-
-    loadUser()
   }, [])
 
   const login = async (email: string, password: string) => {
-    try {
-      const response = await loginUser(email, password)
-      setUser(response.user)
+    // Set loading state
+    setIsLoading(true)
+
+    // Check for the default admin user
+    if (email === "ADMIN" && password === "*Ingline.Sys#9420%") {
+      // Check if admin is disabled
+      const adminDisabled = typeof window !== "undefined" ? localStorage.getItem("adminDisabled") === "true" : false
+
+      if (adminDisabled) {
+        setIsLoading(false)
+        return false
+      }
+
+      // Create admin user
+      const adminUser = {
+        id: "admin-user",
+        name: "Administrator",
+        email: "ADMIN",
+        isAdmin: true,
+        disabled: false,
+      }
+
+      setUser(adminUser)
+      if (typeof window !== "undefined") {
+        localStorage.setItem("user", JSON.stringify(adminUser))
+      }
+      setIsLoading(false)
       return true
-    } catch (error) {
-      console.error("Erro de login:", error)
-      return false
     }
+
+    // In a real scenario, this would be an API call
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    // No other users exist in the initial deployment
+    setIsLoading(false)
+    return false
   }
 
   const register = async (name: string, email: string, password: string) => {
-    try {
-      // Registrar o usuário
-      await registerUser({
-        username: email.split("@")[0],
-        email,
-        password,
-        full_name: name,
-      })
+    // Simulation of register
+    setIsLoading(true)
 
-      // Fazer login automaticamente após o registro
-      const loginResponse = await loginUser(email, password)
-      setUser(loginResponse.user)
-      return true
-    } catch (error) {
-      console.error("Erro de registro:", error)
-      return false
+    // In a real scenario, this would be an API call
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    // Create a new user (not admin by default)
+    const newUser = {
+      id: `user-${Date.now()}`,
+      name,
+      email,
+      isAdmin: false,
+      disabled: false,
     }
+
+    setUser(newUser)
+    if (typeof window !== "undefined") {
+      localStorage.setItem("user", JSON.stringify(newUser))
+    }
+    setIsLoading(false)
+    return true
   }
 
   const logout = () => {
-    removeToken()
     setUser(null)
-    router.push("/login")
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("user")
+    }
   }
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        isAuthenticated: !!user,
-        login,
-        register,
-        logout,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>{children}</AuthContext.Provider>
 }
 
-export const useAuth = () => useContext(AuthContext)
+export function useAuth() {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider")
+  }
+  return context
+}

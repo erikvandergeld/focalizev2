@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "./auth-provider"
@@ -8,14 +9,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
-import { AlertCircle } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export function LoginForm() {
-  const [email, setEmail] = useState("")
+  const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const { login } = useAuth()
   const { toast } = useToast()
@@ -23,10 +21,9 @@ export function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    setError(null)
 
     try {
-      const success = await login(email, password)
+      const success = await login(identifier, password)
       if (success) {
         toast({
           title: "Login realizado com sucesso",
@@ -34,11 +31,18 @@ export function LoginForm() {
         })
         router.push("/dashboard")
       } else {
-        setError("Credenciais inválidas. Verifique seu email e senha.")
+        toast({
+          title: "Erro ao fazer login",
+          description: "Verifique suas credenciais e tente novamente.",
+          variant: "destructive",
+        })
       }
-    } catch (error: any) {
-      setError(error.message || "Erro ao fazer login. Verifique suas credenciais e tente novamente.")
-      console.error("Erro de login:", error)
+    } catch (error) {
+      toast({
+        title: "Erro ao fazer login",
+        description: "Verifique suas credenciais e tente novamente.",
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
@@ -46,21 +50,14 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
       <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="identifier">Nome de usuário ou Email</Label>
         <Input
-          id="email"
+          id="identifier"
           type="text"
-          placeholder="Digite seu email ou nome de usuário"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Digite seu e-mail"
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
           required
         />
       </div>
