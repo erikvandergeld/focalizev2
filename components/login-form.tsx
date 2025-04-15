@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "./auth-provider"
@@ -11,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
 
 export function LoginForm() {
-  const [identifier, setIdentifier] = useState("")
+  const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
@@ -23,7 +22,7 @@ export function LoginForm() {
     setIsLoading(true)
 
     try {
-      const success = await login(identifier, password)
+      const success = await login(email, password)
       if (success) {
         toast({
           title: "Login realizado com sucesso",
@@ -51,13 +50,13 @@ export function LoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="identifier">Nome de usuário ou Email</Label>
+        <Label htmlFor="email">Email</Label>
         <Input
-          id="identifier"
+          id="email"
           type="text"
-          placeholder="Digite seu e-mail"
-          value={identifier}
-          onChange={(e) => setIdentifier(e.target.value)}
+          placeholder="Digite seu email ou nome de usuário"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           required
         />
       </div>

@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "./auth-provider"
@@ -42,6 +41,12 @@ export function RegisterForm() {
           description: "Você será redirecionado para o dashboard.",
         })
         router.push("/dashboard")
+      } else {
+        toast({
+          title: "Erro ao criar conta",
+          description: "Ocorreu um erro ao criar sua conta. Tente novamente.",
+          variant: "destructive",
+        })
       }
     } catch (error) {
       toast({
@@ -61,7 +66,7 @@ export function RegisterForm() {
         <Input
           id="name"
           type="text"
-          placeholder="Seu nome"
+          placeholder="Seu nome completo"
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
