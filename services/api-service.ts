@@ -35,21 +35,31 @@ export async function apiRequest<T = any>(
     config.body = JSON.stringify(data)
   }
 
+  const url = `${API_URL}${endpoint}`
+  console.log(`Requisição API: ${config.method} ${url}`, data ? { data } : "")
+
   try {
-    const response = await fetch(`${API_URL}${endpoint}`, config)
+    const response = await fetch(url, config)
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      return Promise.reject(new Error(errorData.message || "Erro na requisição"))
+      console.error(`Erro API (${response.status}):`, errorData)
+      return Promise.reject(new Error(errorData.message || `Erro ${response.status}: ${response.statusText}`))
     }
 
-    return await response.json()
-  } catch (error) {
+    // Para requisições DELETE que podem não retornar conteúdo
+    if (response.status === 204) {
+      return { success: true } as T
+    }
+
+    const responseData = await response.json()
+    return responseData
+  } catch (error: any) {
+    console.error(`Erro na requisição para ${url}:`, error)
     return Promise.reject(error)
   }
 }
 
-// Helper methods for common HTTP methods
 export const api = {
   get: <T = any>(endpoint: string, config: RequestOptions = {}) =>
     apiRequest<T>(endpoint, { ...config, method: "GET" }),
@@ -59,6 +69,9 @@ export const api = {
 
   put: <T = any>(endpoint: string, data: any, config: RequestOptions = {}) =>
     apiRequest<T>(endpoint, { ...config, method: "PUT", data }),
+
+  patch: <T = any>(endpoint: string, data: any, config: RequestOptions = {}) =>
+    apiRequest<T>(endpoint, { ...config, method: "PATCH", data }),
 
   delete: <T = any>(endpoint: string, config: RequestOptions = {}) =>
     apiRequest<T>(endpoint, { ...config, method: "DELETE" }),

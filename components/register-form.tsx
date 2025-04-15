@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
+import { AlertCircle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export function RegisterForm() {
   const [name, setName] = useState("")
@@ -15,19 +17,22 @@ export function RegisterForm() {
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const { register } = useAuth()
   const { toast } = useToast()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
 
     if (password !== confirmPassword) {
-      toast({
-        title: "Erro de validação",
-        description: "As senhas não coincidem.",
-        variant: "destructive",
-      })
+      setError("As senhas não coincidem.")
+      return
+    }
+
+    if (password.length < 6) {
+      setError("A senha deve ter pelo menos 6 caracteres.")
       return
     }
 
@@ -42,18 +47,11 @@ export function RegisterForm() {
         })
         router.push("/dashboard")
       } else {
-        toast({
-          title: "Erro ao criar conta",
-          description: "Ocorreu um erro ao criar sua conta. Tente novamente.",
-          variant: "destructive",
-        })
+        setError("Erro ao criar conta. Verifique os dados e tente novamente.")
       }
-    } catch (error) {
-      toast({
-        title: "Erro ao criar conta",
-        description: "Ocorreu um erro ao criar sua conta. Tente novamente.",
-        variant: "destructive",
-      })
+    } catch (error: any) {
+      setError(error.message || "Erro ao criar conta. Verifique os dados e tente novamente.")
+      console.error("Erro de registro:", error)
     } finally {
       setIsLoading(false)
     }
@@ -61,6 +59,13 @@ export function RegisterForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
       <div className="space-y-2">
         <Label htmlFor="name">Nome</Label>
         <Input

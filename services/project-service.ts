@@ -2,7 +2,12 @@ import { api } from "./api-service"
 import type { Project, ProjectMember } from "@/types"
 
 export async function getProjects(): Promise<Project[]> {
-  return await api.get("/projects")
+  try {
+    return await api.get("/projects")
+  } catch (error) {
+    console.error("Erro ao buscar projetos:", error)
+    return []
+  }
 }
 
 export async function getProject(id: number | string): Promise<Project> {
@@ -22,7 +27,12 @@ export async function deleteProject(id: number | string): Promise<{ message: str
 }
 
 export async function getProjectMembers(projectId: number | string): Promise<ProjectMember[]> {
-  return await api.get(`/projects/${projectId}/members`)
+  try {
+    return await api.get(`/projects/${projectId}/members`)
+  } catch (error) {
+    console.error(`Erro ao buscar membros do projeto ${projectId}:`, error)
+    return []
+  }
 }
 
 export async function addProjectMember(

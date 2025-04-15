@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { PlusCircle, Pencil, Trash2 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -16,21 +16,46 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
 import { ConfirmDialog } from "./confirm-dialog"
+import { Skeleton } from "@/components/ui/skeleton"
+import { api } from "@/services/api-service"
 
 // Tipos
 type Entity = {
-  id: string
+  id: string | number
   name: string
-  createdAt: string
+  created_at: string
 }
 
 export function EntityManagement() {
   const [entities, setEntities] = useState<Entity[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null)
   const [entityName, setEntityName] = useState("")
   const { toast } = useToast()
+
+  // Carregar entidades
+  useEffect(() => {
+    const fetchEntities = async () => {
+      setIsLoading(true)
+      try {
+        const data = await api.get<Entity[]>("/entities")
+        setEntities(data)
+      } catch (error) {
+        console.error("Erro ao carregar entidades:", error)
+        toast({
+          title: "Erro",
+          description: "Não foi possível carregar as entidades.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchEntities()
+  }, [toast])
 
   const resetForm = () => {
     setEntityName("")
@@ -52,7 +77,7 @@ export function EntityManagement() {
     setIsDeleteDialogOpen(true)
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Validação
     if (!entityName.trim()) {
       toast({
@@ -63,55 +88,79 @@ export function EntityManagement() {
       return
     }
 
-    if (selectedEntity) {
-      // Atualizar entidade existente
-      setEntities((prev) =>
-        prev.map((entity) =>
-          entity.id === selectedEntity.id
-            ? {
-                ...entity,
-                name: entityName,
-              }
-            : entity,
-        ),
-      )
+    try {
+      if (selectedEntity) {
+        // Atualizar entidade existente
+        await api.put(`/entities/${selectedEntity.id}`, { name: entityName })
 
-      toast({
-        title: "Entidade atualizada",
-        description: `A entidade "${entityName}" foi atualizada com sucesso.`,
-      })
-    } else {
-      // Criar nova entidade
-      const newEntity: Entity = {
-        id: `entity-${Date.now()}`,
-        name: entityName,
-        createdAt: new Date().toISOString(),
+        setEntities((prev) =>
+          prev.map((entity) =>
+            entity.id === selectedEntity.id
+              ? {
+                  ...entity,
+                  name: entityName,
+                }
+              : entity,
+          ),
+        )
+
+        toast({
+          title: "Entidade atualizada",
+          description: `A entidade "${entityName}" foi atualizada com sucesso.`,
+        })
+      } else {
+        // Criar nova entidade
+        const response = await api.post<{ id: number | string; message: string }>("/entities", { name: entityName })
+
+        const newEntity: Entity = {
+          id: response.id,
+          name: entityName,
+          created_at: new Date().toISOString(),
+        }
+
+        setEntities((prev) => [...prev, newEntity])
+
+        toast({
+          title: "Entidade criada",
+          description: `A entidade "${entityName}" foi criada com sucesso.`,
+        })
       }
 
-      setEntities((prev) => [...prev, newEntity])
-
+      setIsDialogOpen(false)
+      resetForm()
+    } catch (error) {
+      console.error("Erro ao salvar entidade:", error)
       toast({
-        title: "Entidade criada",
-        description: `A entidade "${entityName}" foi criada com sucesso.`,
+        title: "Erro ao salvar",
+        description: "Ocorreu um erro ao salvar a entidade. Verifique a conexão com o servidor.",
+        variant: "destructive",
       })
     }
-
-    setIsDialogOpen(false)
-    resetForm()
   }
 
-  const handleDeleteEntity = () => {
+  const handleDeleteEntity = async () => {
     if (!selectedEntity) return
 
-    setEntities((prev) => prev.filter((entity) => entity.id !== selectedEntity.id))
+    try {
+      await api.delete(`/entities/${selectedEntity.id}`)
 
-    toast({
-      title: "Entidade excluída",
-      description: `A entidade "${selectedEntity.name}" foi excluída com sucesso.`,
-    })
+      setEntities((prev) => prev.filter((entity) => entity.id !== selectedEntity.id))
 
-    setIsDeleteDialogOpen(false)
-    setSelectedEntity(null)
+      toast({
+        title: "Entidade excluída",
+        description: `A entidade "${selectedEntity.name}" foi excluída com sucesso.`,
+      })
+
+      setIsDeleteDialogOpen(false)
+      setSelectedEntity(null)
+    } catch (error) {
+      console.error("Erro ao excluir entidade:", error)
+      toast({
+        title: "Erro ao excluir",
+        description: "Ocorreu um erro ao excluir a entidade. Verifique a conexão com o servidor.",
+        variant: "destructive",
+      })
+    }
   }
 
   const formatDate = (dateString: string) => {
@@ -121,6 +170,20 @@ export function EntityManagement() {
       month: "2-digit",
       year: "numeric",
     }).format(date)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="p-6 space-y-4">
+        <div className="flex justify-between items-center mb-6">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-20 w-full" />
+        <Skeleton className="h-20 w-full" />
+      </div>
+    )
   }
 
   return (
@@ -153,7 +216,7 @@ export function EntityManagement() {
               entities.map((entity) => (
                 <TableRow key={entity.id}>
                   <TableCell className="font-medium">{entity.name}</TableCell>
-                  <TableCell>{formatDate(entity.createdAt)}</TableCell>
+                  <TableCell>{formatDate(entity.created_at)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(entity)} title="Editar">

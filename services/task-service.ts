@@ -1,9 +1,35 @@
 import { api } from "./api-service"
-import type { Task, Subtask, Category } from "@/types"
+import type { Task, Subtask, Category, Comment } from "@/types"
 
-export async function getTasks(projectId?: number | string): Promise<Task[]> {
-  const endpoint = projectId ? `/tasks?project_id=${projectId}` : "/tasks"
-  return await api.get(endpoint)
+export async function getTasks(projectId?: number | string, filters?: Record<string, any>): Promise<Task[]> {
+  try {
+    let endpoint = "/tasks"
+
+    // Adicionar parâmetros de consulta
+    const queryParams = new URLSearchParams()
+
+    if (projectId) {
+      queryParams.append("project_id", projectId.toString())
+    }
+
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          queryParams.append(key, value.toString())
+        }
+      })
+    }
+
+    const queryString = queryParams.toString()
+    if (queryString) {
+      endpoint += `?${queryString}`
+    }
+
+    return await api.get(endpoint)
+  } catch (error) {
+    console.error("Erro ao buscar tarefas:", error)
+    return []
+  }
 }
 
 export async function getTask(id: number | string): Promise<Task> {
@@ -22,12 +48,42 @@ export async function deleteTask(id: number | string): Promise<{ message: string
   return await api.delete(`/tasks/${id}`)
 }
 
+export async function updateTaskStatus(id: number | string, statusId: number | string): Promise<{ message: string }> {
+  return await api.patch(`/tasks/${id}/status`, { status_id: statusId })
+}
+
+export async function getTaskComments(taskId: number | string): Promise<Comment[]> {
+  try {
+    return await api.get(`/tasks/${taskId}/comments`)
+  } catch (error) {
+    console.error(`Erro ao buscar comentários da tarefa ${taskId}:`, error)
+    return []
+  }
+}
+
+export async function addTaskComment(
+  taskId: number | string,
+  text: string,
+): Promise<{ message: string; commentId: number }> {
+  return await api.post(`/tasks/${taskId}/comments`, { text })
+}
+
 export async function getTaskCategories(taskId: number | string): Promise<Category[]> {
-  return await api.get(`/tasks/${taskId}/categories`)
+  try {
+    return await api.get(`/tasks/${taskId}/categories`)
+  } catch (error) {
+    console.error(`Erro ao buscar categorias da tarefa ${taskId}:`, error)
+    return []
+  }
 }
 
 export async function getTaskSubtasks(taskId: number | string): Promise<Subtask[]> {
-  return await api.get(`/tasks/${taskId}/subtasks`)
+  try {
+    return await api.get(`/tasks/${taskId}/subtasks`)
+  } catch (error) {
+    console.error(`Erro ao buscar subtarefas da tarefa ${taskId}:`, error)
+    return []
+  }
 }
 
 export async function createSubtask(

@@ -19,7 +19,7 @@ export function useProjects() {
       setProjects(data)
     } catch (err: any) {
       setError(err.message || "Erro ao carregar projetos")
-      console.error("Error fetching projects:", err)
+      console.error("Erro ao buscar projetos:", err)
     } finally {
       setIsLoading(false)
     }
@@ -37,7 +37,7 @@ export function useProjects() {
           title: "Projeto criado",
           description: "O projeto foi criado com sucesso.",
         })
-        await fetchProjects() // Refresh the list
+        await fetchProjects() // Atualizar a lista
         return result
       } catch (err: any) {
         toast({
@@ -52,14 +52,14 @@ export function useProjects() {
   )
 
   const editProject = useCallback(
-    async (id: number, projectData: Partial<Project>) => {
+    async (id: number | string, projectData: Partial<Project>) => {
       try {
         const result = await updateProject(id, projectData)
         toast({
           title: "Projeto atualizado",
           description: "O projeto foi atualizado com sucesso.",
         })
-        await fetchProjects() // Refresh the list
+        await fetchProjects() // Atualizar a lista
         return result
       } catch (err: any) {
         toast({
@@ -74,14 +74,14 @@ export function useProjects() {
   )
 
   const removeProject = useCallback(
-    async (id: number) => {
+    async (id: number | string) => {
       try {
         const result = await deleteProject(id)
         toast({
           title: "Projeto excluído",
           description: "O projeto foi excluído com sucesso.",
         })
-        await fetchProjects() // Refresh the list
+        await fetchProjects() // Atualizar a lista
         return result
       } catch (err: any) {
         toast({
