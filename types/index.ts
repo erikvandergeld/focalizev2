@@ -1,99 +1,117 @@
-// User types
+// Tipos básicos para a aplicação
+
 export interface User {
-  id: number
+  id: number | string
   username: string
   email: string
   full_name: string
-  role: "admin" | "manager" | "member"
+  role: string
   created_at: string
-  updated_at: string
+  updated_at?: string
   is_active: boolean
 }
 
-// Project types
 export interface Project {
-  id: number
+  id: number | string
   name: string
-  description: string | null
-  color: string | null
-  owner_id: number
+  description?: string
+  status: string
+  start_date?: string
+  end_date?: string
   created_at: string
-  updated_at: string
+  updated_at?: string
+  created_by?: number | string
+  owner?: User
+  entities?: Entity[]
 }
 
 export interface ProjectMember {
-  project_id: number
-  user_id: number
-  role: "owner" | "admin" | "member" | "viewer"
-  joined_at: string
-  // Additional user info
-  username?: string
-  email?: string
-  full_name?: string
-}
-
-// Task types
-export interface TaskStatus {
-  id: number
-  name: string
-  color: string | null
-  position: number
-  project_id: number
-  is_default: boolean
-}
-
-export interface Category {
-  id: number
-  name: string
-  color: string | null
-  project_id: number
-}
-
-export interface Priority {
-  id: number
-  name: string
-  color: string | null
-  value: number
-  project_id: number
+  id?: number | string
+  project_id: number | string
+  user_id: number | string
+  role: string
+  created_at?: string
+  user?: User
 }
 
 export interface Task {
-  id: number
+  id: number | string
   title: string
-  description: string | null
-  project_id: number
-  status_id: number
-  priority_id: number | null
-  assignee_id: number | null
-  reporter_id: number
-  due_date: string | null
+  description?: string
+  status: string
+  priority: string
+  due_date?: string
+  project_id?: number | string
+  assigned_to?: number | string
+  created_by?: number | string
   created_at: string
-  updated_at: string
-  completed_at: string | null
-  position: number
-  // Additional info
-  status?: TaskStatus
-  priority?: Priority
+  updated_at?: string
+  completed_at?: string
+  project?: Project
   assignee?: User
-  reporter?: User
-  categories?: Category[]
+  creator?: User
+  tags?: Tag[]
   subtasks?: Subtask[]
 }
 
 export interface Subtask {
-  id: number
-  task_id: number
+  id: number | string
+  task_id: number | string
   title: string
   is_completed: boolean
-  position: number
   created_at: string
-  completed_at: string | null
+  updated_at?: string
 }
 
-// Comment type for the UI
 export interface Comment {
-  id: string
+  id: number | string
+  task_id: number | string
+  user_id: number | string
   text: string
-  author: string
-  createdAt: Date
+  created_at: string
+  updated_at?: string
+  user?: User
+}
+
+export interface Category {
+  id: number | string
+  name: string
+  color: string
+  created_at: string
+  updated_at?: string
+}
+
+export interface Entity {
+  id: number | string
+  name: string
+  description?: string
+  created_at: string
+  updated_at?: string
+  created_by?: number | string
+  is_active: boolean
+}
+
+export interface Tag {
+  id: number | string
+  name: string
+  color: string
+  created_at: string
+  updated_at?: string
+}
+
+export interface TaskFilter {
+  status?: string
+  priority?: string
+  assigned_to?: number | string
+  due_date_start?: string
+  due_date_end?: string
+  search?: string
+  tags?: (number | string)[]
+}
+
+export interface ApiResponse<T> {
+  data?: T
+  message?: string
+  error?: string
+  status?: number
 }

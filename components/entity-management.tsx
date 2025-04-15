@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { PlusCircle, Pencil, Trash2 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -14,51 +14,25 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { ConfirmDialog } from "./confirm-dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { api } from "@/services/api-service"
-
-// Tipos
-type Entity = {
-  id: string | number
-  name: string
-  created_at: string
-}
+import { useEntities } from "@/hooks/use-entities"
+import type { Entity } from "@/types"
 
 export function EntityManagement() {
-  const [entities, setEntities] = useState<Entity[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const { entities, isLoading, addEntity, editEntity, removeEntity } = useEntities()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null)
   const [entityName, setEntityName] = useState("")
+  const [entityDescription, setEntityDescription] = useState("")
   const { toast } = useToast()
-
-  // Carregar entidades
-  useEffect(() => {
-    const fetchEntities = async () => {
-      setIsLoading(true)
-      try {
-        const data = await api.get<Entity[]>("/entities")
-        setEntities(data)
-      } catch (error) {
-        console.error("Erro ao carregar entidades:", error)
-        toast({
-          title: "Erro",
-          description: "Não foi possível carregar as entidades.",
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchEntities()
-  }, [toast])
 
   const resetForm = () => {
     setEntityName("")
+    setEntityDescription("")
     setSelectedEntity(null)
   }
 
@@ -66,6 +40,7 @@ export function EntityManagement() {
     if (entity) {
       setSelectedEntity(entity)
       setEntityName(entity.name)
+      setEntityDescription(entity.description || "")
     } else {
       resetForm()
     }
@@ -91,38 +66,15 @@ export function EntityManagement() {
     try {
       if (selectedEntity) {
         // Atualizar entidade existente
-        await api.put(`/entities/${selectedEntity.id}`, { name: entityName })
-
-        setEntities((prev) =>
-          prev.map((entity) =>
-            entity.id === selectedEntity.id
-              ? {
-                  ...entity,
-                  name: entityName,
-                }
-              : entity,
-          ),
-        )
-
-        toast({
-          title: "Entidade atualizada",
-          description: `A entidade "${entityName}" foi atualizada com sucesso.`,
+        await editEntity(selectedEntity.id, {
+          name: entityName,
+          description: entityDescription,
         })
       } else {
         // Criar nova entidade
-        const response = await api.post<{ id: number | string; message: string }>("/entities", { name: entityName })
-
-        const newEntity: Entity = {
-          id: response.id,
+        await addEntity({
           name: entityName,
-          created_at: new Date().toISOString(),
-        }
-
-        setEntities((prev) => [...prev, newEntity])
-
-        toast({
-          title: "Entidade criada",
-          description: `A entidade "${entityName}" foi criada com sucesso.`,
+          description: entityDescription,
         })
       }
 
@@ -130,11 +82,6 @@ export function EntityManagement() {
       resetForm()
     } catch (error) {
       console.error("Erro ao salvar entidade:", error)
-      toast({
-        title: "Erro ao salvar",
-        description: "Ocorreu um erro ao salvar a entidade. Verifique a conexão com o servidor.",
-        variant: "destructive",
-      })
     }
   }
 
@@ -142,24 +89,11 @@ export function EntityManagement() {
     if (!selectedEntity) return
 
     try {
-      await api.delete(`/entities/${selectedEntity.id}`)
-
-      setEntities((prev) => prev.filter((entity) => entity.id !== selectedEntity.id))
-
-      toast({
-        title: "Entidade excluída",
-        description: `A entidade "${selectedEntity.name}" foi excluída com sucesso.`,
-      })
-
+      await removeEntity(selectedEntity.id)
       setIsDeleteDialogOpen(false)
       setSelectedEntity(null)
     } catch (error) {
       console.error("Erro ao excluir entidade:", error)
-      toast({
-        title: "Erro ao excluir",
-        description: "Ocorreu um erro ao excluir a entidade. Verifique a conexão com o servidor.",
-        variant: "destructive",
-      })
     }
   }
 
@@ -201,6 +135,7 @@ export function EntityManagement() {
           <TableHeader>
             <TableRow>
               <TableHead>Nome</TableHead>
+              <TableHead>Descrição</TableHead>
               <TableHead>Data de Criação</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
@@ -208,7 +143,7 @@ export function EntityManagement() {
           <TableBody>
             {entities.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={3} className="h-24 text-center">
+                <TableCell colSpan={4} className="h-24 text-center">
                   Nenhuma entidade cadastrada. Clique em "Nova Entidade" para adicionar.
                 </TableCell>
               </TableRow>
@@ -216,6 +151,11 @@ export function EntityManagement() {
               entities.map((entity) => (
                 <TableRow key={entity.id}>
                   <TableCell className="font-medium">{entity.name}</TableCell>
+                  <TableCell>
+                    {entity.description
+                      ? entity.description.substring(0, 50) + (entity.description.length > 50 ? "..." : "")
+                      : "-"}
+                  </TableCell>
                   <TableCell>{formatDate(entity.created_at)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
@@ -261,6 +201,16 @@ export function EntityManagement() {
                 onChange={(e) => setEntityName(e.target.value)}
                 placeholder="Digite o nome da entidade"
                 required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="description">Descrição</Label>
+              <Textarea
+                id="description"
+                value={entityDescription}
+                onChange={(e) => setEntityDescription(e.target.value)}
+                placeholder="Digite uma descrição (opcional)"
+                rows={3}
               />
             </div>
           </div>

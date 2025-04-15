@@ -1,32 +1,41 @@
 "use client"
 
-import type React from "react"
-import { createContext, useContext, useEffect, useState } from "react"
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { useRouter } from "next/navigation"
 import { loginUser, registerUser, getCurrentUser, removeToken } from "@/services/auth-service"
 import type { User } from "@/types"
 
-type AuthContextType = {
+interface AuthContextType {
   user: User | null
+  isLoading: boolean
+  isAuthenticated: boolean
   login: (email: string, password: string) => Promise<boolean>
   register: (name: string, email: string, password: string) => Promise<boolean>
   logout: () => void
-  isLoading: boolean
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  isLoading: true,
+  isAuthenticated: false,
+  login: async () => false,
+  register: async () => false,
+  logout: () => {},
+})
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
-    // Verificar se o usuário está logado ao carregar a página
     const loadUser = async () => {
       try {
-        const userData = await getCurrentUser()
-        setUser(userData)
+        const currentUser = await getCurrentUser()
+        setUser(currentUser)
       } catch (error) {
-        console.error("Error loading user:", error)
+        console.error("Erro ao carregar usuário:", error)
+        setUser(null)
       } finally {
         setIsLoading(false)
       }
@@ -36,37 +45,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const login = async (email: string, password: string) => {
-    setIsLoading(true)
     try {
       const response = await loginUser(email, password)
       setUser(response.user)
-      setIsLoading(false)
       return true
     } catch (error) {
-      console.error("Login error:", error)
-      setIsLoading(false)
+      console.error("Erro de login:", error)
       return false
     }
   }
 
   const register = async (name: string, email: string, password: string) => {
-    setIsLoading(true)
     try {
+      // Registrar o usuário
       await registerUser({
-        username: email.split("@")[0], // Simple username from email
+        username: email.split("@")[0],
         email,
         password,
         full_name: name,
       })
 
-      // Auto login after registration
+      // Fazer login automaticamente após o registro
       const loginResponse = await loginUser(email, password)
       setUser(loginResponse.user)
-      setIsLoading(false)
       return true
     } catch (error) {
-      console.error("Registration error:", error)
-      setIsLoading(false)
+      console.error("Erro de registro:", error)
       return false
     }
   }
@@ -74,16 +78,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     removeToken()
     setUser(null)
+    router.push("/login")
   }
 
   return (
     <AuthContext.Provider
       value={{
         user,
+        isLoading,
+        isAuthenticated: !!user,
         login,
         register,
         logout,
-        isLoading,
       }}
     >
       {children}
@@ -91,10 +97,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
-  return context
-}
+export const useAuth = () => useContext(AuthContext)
