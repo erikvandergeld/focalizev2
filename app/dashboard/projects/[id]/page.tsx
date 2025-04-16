@@ -2,8 +2,10 @@ import { DashboardHeader } from "@/components/dashboard-header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ArrowLeft, Pencil } from "lucide-react"
+import { ProtectedRoute } from "@/components/protected-route"  // Importando ProtectedRoute
 import Link from "next/link"
 import { ProjectDetails } from "@/components/project-details"
+
 
 interface ProjectPageProps {
   params: {
@@ -13,6 +15,7 @@ interface ProjectPageProps {
 
 export default function ProjectPage({ params }: ProjectPageProps) {
   return (
+    <ProtectedRoute>
     <div className="flex flex-col gap-6">
       <DashboardHeader heading="Detalhes do Projeto" text="Visualize informações e tarefas associadas ao projeto.">
         <div className="flex gap-2">
@@ -36,5 +39,6 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         </CardContent>
       </Card>
     </div>
+    </ProtectedRoute>
   )
 }

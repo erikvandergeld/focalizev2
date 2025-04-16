@@ -6,6 +6,8 @@ import { useState, useCallback, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { PlusCircle, Pencil, Trash2 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useAuth } from "./auth-provider"
+import { useRouter } from "next/navigation"
 import {
   Dialog,
   DialogContent,
@@ -39,16 +41,9 @@ type User = {
   createdAt: string
 }
 
-// Dados de exemplo
-const entities = [
-  { id: "ingline", name: "Ingline Systems" },
-  { id: "line_movel", name: "Line Movel" },
-  { id: "macrophony", name: "Macrophony" },
-  { id: "voicenet", name: "Voicenet" },
-  { id: "connyctel", name: "Connyctel" },
-]
-
 const permissions: Permission[] = [
+  { id: "delete_project", name: "Excluir Projetos", description: "Permite excluir projetos"},
+  { id: "acess_config", name: "Acessar Configurações", description: "Permite acessar as configurações do sistema" },
   { id: "create_task", name: "Criar Tarefas", description: "Permite criar novas tarefas" },
   { id: "edit_task", name: "Editar Tarefas", description: "Permite editar tarefas existentes" },
   { id: "delete_task", name: "Excluir Tarefas", description: "Permite excluir tarefas" },
@@ -63,7 +58,22 @@ const permissions: Permission[] = [
   { id: "manage_clients", name: "Gerenciar Clientes", description: "Permite gerenciar clientes" },
 ]
 
+
+
 export function UserManagement() {
+  const { user, isLoading } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!isLoading && (!user || !user.permissions?.includes("acess_config"))) {
+      router.push("/dashboard") // ou "/login", ou mostre uma tela de erro
+    }
+  }, [user, isLoading, router])
+
+  if (!user?.permissions.includes("acess_config")) {
+    return <div className="p-6 text-red-500">Você não tem permissão para acessar esta seção.</div>
+  }
+
   const [users, setUsers] = useState<User[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -81,12 +91,53 @@ export function UserManagement() {
   // Inicialize com um valor padrão e atualize após a montagem do componente
   const [isAdminDisabled, setIsAdminDisabled] = useState(false)
 
+  const [entities, setEntities] = useState<{ id: string; name: string }[]>([])
+  useEffect(() => {
+    const carregarEntidades = async () => {
+      try {
+        const response = await fetch("/api/entidades")
+        const data = await response.json()
+
+        if (response.ok && data.success) {
+          setEntities(data.entidades)
+        } else {
+          toast({
+            title: "Erro",
+            description: data.message || "Erro ao buscar entidades.",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("Erro ao carregar entidades:", error)
+        toast({
+          title: "Erro",
+          description: "Erro ao se conectar com o servidor.",
+          variant: "destructive",
+        })
+      }
+    }
+
+    carregarEntidades()
+  }, [toast])
+
   // Carregue o valor do localStorage apenas no lado do cliente
   useEffect(() => {
-    // Verificar se estamos no navegador antes de acessar localStorage
-    if (typeof window !== "undefined") {
-      setIsAdminDisabled(localStorage.getItem("adminDisabled") === "true")
+    const carregarUsuarios = async () => {
+      const response = await fetch("/api/usuarios")
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setUsers(data.usuarios)
+      } else {
+        toast({
+          title: "Erro",
+          description: "Erro ao buscar usuários.",
+          variant: "destructive",
+        })
+      }
     }
+
+    carregarUsuarios()
   }, [])
 
   const resetForm = () => {
@@ -99,6 +150,19 @@ export function UserManagement() {
       entities: [],
       permissions: [],
     })
+    setSelectedUser(null)
+  }
+  const handleDeleteUser = () => {
+    if (!selectedUser) return
+
+    setUsers((prev) => prev.filter((user) => user.id !== selectedUser.id))
+
+    toast({
+      title: "Usuário excluído",
+      description: `O usuário ${selectedUser.firstName} ${selectedUser.lastName} foi excluído com sucesso.`,
+    })
+
+    setIsDeleteDialogOpen(false)
     setSelectedUser(null)
   }
 
@@ -148,9 +212,9 @@ export function UserManagement() {
     }))
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Validação
-    if (!formData.firstName || !formData.lastName || !formData.email) {
+    if (!formData.firstName || !formData.lastName || !formData.email || !formData.password || !formData.confirmPassword) {
       toast({
         title: "Erro de validação",
         description: "Preencha todos os campos obrigatórios.",
@@ -196,11 +260,43 @@ export function UserManagement() {
     }
 
     if (selectedUser) {
-      // Atualizar usuário existente
-      setUsers((prev) =>
-        prev.map((user) =>
-          user.id === selectedUser.id
-            ? {
+      try {
+        const response = await fetch(`/api/usuarios/${selectedUser.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${localStorage.getItem("token") || ""}`, // ✅ aqui
+          },
+          body: JSON.stringify({
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            entities: formData.entities,
+            permissions: formData.permissions,
+          }),
+        })
+
+        const data = await response.json()
+
+        if (!response.ok || !data.success) {
+          toast({
+            title: "Erro",
+            description: data.message || "Erro ao atualizar o usuário.",
+            variant: "destructive",
+          })
+          return
+        }
+
+        toast({
+          title: "Usuário atualizado",
+          description: `O usuário ${formData.firstName} ${formData.lastName} foi atualizado com sucesso.`,
+        })
+
+        // Atualizar localmente a lista
+        setUsers((prev) =>
+          prev.map((user) =>
+            user.id === selectedUser.id
+              ? {
                 ...user,
                 firstName: formData.firstName,
                 lastName: formData.lastName,
@@ -208,51 +304,81 @@ export function UserManagement() {
                 entities: formData.entities,
                 permissions: formData.permissions,
               }
-            : user,
-        ),
-      )
-
-      toast({
-        title: "Usuário atualizado",
-        description: `O usuário ${formData.firstName} ${formData.lastName} foi atualizado com sucesso.`,
-      })
-    } else {
-      // Criar novo usuário
-      const newUser: User = {
-        id: `user-${Date.now()}`,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-        entities: formData.entities,
-        permissions: formData.permissions,
-        createdAt: new Date().toISOString(),
+              : user
+          )
+        )
+      } catch (error) {
+        console.error("Erro ao atualizar:", error)
+        toast({
+          title: "Erro",
+          description: "Erro ao se conectar com o servidor.",
+          variant: "destructive",
+        })
+        return
       }
+    } else {
+      try {
+        const response = await fetch("/api/cadastro", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${localStorage.getItem("token") || ""}`, // ✅ aqui
+          },          
+          body: JSON.stringify({
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            password: formData.password,
+            entities: formData.entities,
+            permissions: formData.permissions,
+          }),
+        })
 
-      setUsers((prev) => [...prev, newUser])
+        const data = await response.json()
 
-      toast({
-        title: "Usuário criado",
-        description: `O usuário ${formData.firstName} ${formData.lastName} foi criado com sucesso.`,
-      })
+        if (!response.ok || !data.success) {
+          toast({
+            title: "Erro",
+            description: data.message || "Erro ao cadastrar o usuário.",
+            variant: "destructive",
+          })
+          return
+        }
+
+        toast({
+          title: "Usuário criado",
+          description: `O usuário ${formData.firstName} ${formData.lastName} foi criado com sucesso.`,
+        })
+
+        // Atualizar a lista local com o novo usuário
+        setUsers((prev) => [
+          ...prev,
+          {
+            id: `user-${Date.now()}`,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            entities: formData.entities,
+            permissions: formData.permissions,
+            createdAt: new Date().toISOString(),
+          },
+        ])
+      } catch (error) {
+        console.error("Erro ao cadastrar:", error)
+        toast({
+          title: "Erro",
+          description: "Erro ao se conectar com o servidor.",
+          variant: "destructive",
+        })
+        return
+      }
     }
 
+    // Após criar ou atualizar
     setIsDialogOpen(false)
     resetForm()
   }
 
-  const handleDeleteUser = () => {
-    if (!selectedUser) return
-
-    setUsers((prev) => prev.filter((user) => user.id !== selectedUser.id))
-
-    toast({
-      title: "Usuário excluído",
-      description: `O usuário ${selectedUser.firstName} ${selectedUser.lastName} foi excluído com sucesso.`,
-    })
-
-    setIsDeleteDialogOpen(false)
-    setSelectedUser(null)
-  }
 
   const handleToggleAdminStatus = useCallback(() => {
     // Verificar se estamos no navegador antes de acessar localStorage
@@ -526,3 +652,4 @@ export function UserManagement() {
     </div>
   )
 }
+

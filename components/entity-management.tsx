@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { PlusCircle, Pencil, Trash2 } from "lucide-react"
@@ -52,7 +53,7 @@ export function EntityManagement() {
     setIsDeleteDialogOpen(true)
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Validação
     if (!entityName.trim()) {
       toast({
@@ -65,13 +66,35 @@ export function EntityManagement() {
 
     if (selectedEntity) {
       // Atualizar entidade existente
+
+      const response = await fetch(`/api/entidades/${selectedEntity.id}`, {
+        method: 'PUT',
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token") || ""}`, // ✅ aqui
+        },
+        body: JSON.stringify({
+          name: entityName,
+        }),
+      })
+
+      const data = await response.json()
+      if (!response.ok || !data.success) {
+        toast({
+          title: "Erro",
+          description: data.message || "Erro ao atualizar a entidade.",
+          variant: "destructive",
+        })
+        return
+      }
+      // Atualizar a lista de entidades
       setEntities((prev) =>
         prev.map((entity) =>
           entity.id === selectedEntity.id
             ? {
-                ...entity,
-                name: entityName,
-              }
+              ...entity,
+              name: entityName,
+            }
             : entity,
         ),
       )
@@ -81,38 +104,129 @@ export function EntityManagement() {
         description: `A entidade "${entityName}" foi atualizada com sucesso.`,
       })
     } else {
-      // Criar nova entidade
-      const newEntity: Entity = {
-        id: `entity-${Date.now()}`,
-        name: entityName,
-        createdAt: new Date().toISOString(),
+      // CRIAÇÃO de nova entidade
+      try {
+        const response = await fetch("/api/entidades", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${localStorage.getItem("token") || ""}`, // ✅ aqui
+          },
+          body: JSON.stringify({
+            id: entityName.toLowerCase().replace(/\s+/g, "_"),
+            name: entityName,
+          }),
+        })
+
+        const data = await response.json()
+
+        if (!response.ok || !data.success) {
+          toast({
+            title: "Erro",
+            description: data.message || "Erro ao cadastrar a entidade.",
+            variant: "destructive",
+          })
+          return
+        }
+
+        toast({
+          title: "Entidade criada",
+          description: `A entidade "${entityName}" foi criada com sucesso.`,
+        })
+
+        // Atualizar lista após criar
+        setEntities((prev) => [
+          ...prev,
+          {
+            id: entityName.toLowerCase().replace(/\s+/g, "_"),
+            name: entityName,
+            createdAt: new Date().toISOString(),
+          },
+        ])
+      } catch (error) {
+        console.error("Erro ao cadastrar entidade:", error)
+        toast({
+          title: "Erro",
+          description: "Erro ao se conectar com o servidor.",
+          variant: "destructive",
+        })
+        return
       }
-
-      setEntities((prev) => [...prev, newEntity])
-
-      toast({
-        title: "Entidade criada",
-        description: `A entidade "${entityName}" foi criada com sucesso.`,
-      })
     }
 
+    // Sempre ao final
     setIsDialogOpen(false)
     resetForm()
   }
 
-  const handleDeleteEntity = () => {
+  useEffect(() => {
+    const carregarEntidades = async () => {
+      try {
+        const response = await fetch("/api/entidades")
+        const data = await response.json()
+
+        if (response.ok && data.success) {
+          setEntities(data.entidades)
+        } else {
+          toast({
+            title: "Erro",
+            description: data.message || "Não foi possível carregar as entidades.",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("Erro ao carregar entidades:", error)
+        toast({
+          title: "Erro",
+          description: "Erro de conexão ao buscar entidades.",
+          variant: "destructive",
+        })
+      }
+    }
+
+    carregarEntidades()
+  }, [])
+
+
+  const handleDeleteEntity = async () => {
     if (!selectedEntity) return
 
-    setEntities((prev) => prev.filter((entity) => entity.id !== selectedEntity.id))
+    try {
+      const response = await fetch(`/api/entidades/${selectedEntity.id}`, {
+        method: "DELETE",
+      })
 
-    toast({
-      title: "Entidade excluída",
-      description: `A entidade "${selectedEntity.name}" foi excluída com sucesso.`,
-    })
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        toast({
+          title: "Erro ao excluir",
+          description: data.message || "Erro ao excluir a entidade.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      setEntities((prev) => prev.filter((entity) => entity.id !== selectedEntity.id))
+
+      toast({
+        title: "Entidade excluída",
+        description: `A entidade "${selectedEntity.name}" foi excluída com sucesso.`,
+      })
+    } catch (error) {
+      console.error("Erro ao excluir entidade:", error)
+      toast({
+        title: "Erro",
+        description: "Erro ao se conectar com o servidor.",
+        variant: "destructive",
+      })
+    }
 
     setIsDeleteDialogOpen(false)
     setSelectedEntity(null)
   }
+
+
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)

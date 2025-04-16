@@ -2,11 +2,13 @@ import { DashboardHeader } from "@/components/dashboard-header"
 import { ProjectList } from "@/components/project-list"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ProtectedRoute } from "@/components/protected-route"  // Importando ProtectedRoute
 import { Plus } from "lucide-react"
 import Link from "next/link"
 
 export default function ProjectsPage() {
   return (
+    <ProtectedRoute>
     <div className="flex flex-col gap-6 w-full">
       <DashboardHeader heading="Projetos" text="Gerencie seus projetos e visualize as tarefas associadas.">
         <Link href="/dashboard/projects/new">
@@ -25,5 +27,6 @@ export default function ProjectsPage() {
         </CardContent>
       </Card>
     </div>
+  </ProtectedRoute>
   )
 }

@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { createContext, useContext, useEffect, useState } from "react"
 
 type User = {
@@ -10,7 +8,9 @@ type User = {
   email: string
   isAdmin: boolean
   disabled: boolean
+  permissions: string[]  // ✅ adiciona aqui
 }
+
 
 type AuthContextType = {
   user: User | null
@@ -30,60 +30,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Verificar se o usuário está logado ao carregar a página
     if (typeof window !== "undefined") {
       const storedUser = localStorage.getItem("user")
-      if (storedUser) {
+      const token = localStorage.getItem("token")
+      if (storedUser && token) {
         setUser(JSON.parse(storedUser))
       }
       setIsLoading(false)
     }
   }, [])
 
+  // Função de login
   const login = async (email: string, password: string) => {
-    // Set loading state
     setIsLoading(true)
+  
+    try {
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      })
+  
+      const data = await response.json()
 
-    // Check for the default admin user
-    if (email === "ADMIN" && password === "*Ingline.Sys#9420%") {
-      // Check if admin is disabled
-      const adminDisabled = typeof window !== "undefined" ? localStorage.getItem("adminDisabled") === "true" : false
+      if (response.ok && data.success) {
 
-      if (adminDisabled) {
+        const loggedUser = {
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email,
+          isAdmin: data.user.isAdmin,
+          disabled: data.user.disabled,
+          permissions: data.user.permissions || [],
+        }
+  
+        const token = data.token
+  
+        setUser(loggedUser)
+        localStorage.setItem("user", JSON.stringify(loggedUser))
+        localStorage.setItem("token", token)
+        setIsLoading(false)
+        return true
+      } else {
         setIsLoading(false)
         return false
       }
-
-      // Create admin user
-      const adminUser = {
-        id: "admin-user",
-        name: "Administrator",
-        email: "ADMIN",
-        isAdmin: true,
-        disabled: false,
-      }
-
-      setUser(adminUser)
-      if (typeof window !== "undefined") {
-        localStorage.setItem("user", JSON.stringify(adminUser))
-      }
+    } catch (error) {
+      console.error("Erro ao fazer login:", error)
       setIsLoading(false)
-      return true
+      return false
     }
-
-    // In a real scenario, this would be an API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    // No other users exist in the initial deployment
-    setIsLoading(false)
-    return false
   }
+  
 
+  // Função de registro
   const register = async (name: string, email: string, password: string) => {
-    // Simulation of register
+    // Simulação de registro (pode ser substituído por uma chamada real à API)
     setIsLoading(true)
 
-    // In a real scenario, this would be an API call
     await new Promise((resolve) => setTimeout(resolve, 1000))
 
-    // Create a new user (not admin by default)
     const newUser = {
       id: `user-${Date.now()}`,
       name,
@@ -100,12 +106,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return true
   }
 
+  // Função de logout
   const logout = () => {
     setUser(null)
     if (typeof window !== "undefined") {
       localStorage.removeItem("user")
+      localStorage.removeItem("token") // Remover o JWT no logout
     }
-  }
+   }
 
   return <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>{children}</AuthContext.Provider>
 }
