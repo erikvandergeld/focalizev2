@@ -4,28 +4,46 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TaskList } from "@/components/task-list"
+import { useToast } from "@/components/ui/use-toast"
 
 interface ClientDetailsProps {
   id: string
 }
 
-// Dados de exemplo
-const clientData: Record<string, any> = {}
-
 export function ClientDetails({ id }: ClientDetailsProps) {
   const [client, setClient] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const { toast } = useToast()
 
   useEffect(() => {
-    // Simulação de carregamento de dados
-    const loadClient = async () => {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      setClient(clientData[id as keyof typeof clientData] || null)
-      setIsLoading(false)
+    const fetchClient = async () => {
+      try {
+        const response = await fetch(`/api/clientes/${id}`)
+        const data = await response.json()
+
+        if (response.ok && data.success) {
+          setClient(data.client)
+        } else {
+          toast({
+            title: "Erro ao carregar cliente",
+            description: data.message || "Não foi possível encontrar o cliente.",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("Erro ao buscar cliente:", error)
+        toast({
+          title: "Erro ao carregar cliente",
+          description: "Erro ao se conectar com o servidor.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
     }
 
-    loadClient()
-  }, [id])
+    fetchClient()
+  }, [id, toast])
 
   if (isLoading) {
     return <div className="flex justify-center p-4">Carregando...</div>
@@ -75,7 +93,7 @@ export function ClientDetails({ id }: ClientDetailsProps) {
               </div>
               <div className="col-span-2">
                 <dt className="font-medium mb-1">Observações:</dt>
-                <dd className="bg-muted p-2 rounded">{client.notes}</dd>
+                <dd className="bg-muted p-2 rounded">{client.notes || "Nenhuma observação"}</dd>
               </div>
             </dl>
           </CardContent>
@@ -106,6 +124,7 @@ export function ClientDetails({ id }: ClientDetailsProps) {
           </CardContent>
         </Card>
       </div>
+
       <Tabs defaultValue="tasks">
         <TabsList>
           <TabsTrigger value="tasks">Tarefas</TabsTrigger>
@@ -127,29 +146,7 @@ export function ClientDetails({ id }: ClientDetailsProps) {
               <CardTitle>Histórico de Atividades</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-start gap-4">
-                  <div className="min-w-24 text-sm text-muted-foreground">{formatDate("2023-05-10T10:00:00Z")}</div>
-                  <div>
-                    <p className="text-sm font-medium">Tarefa concluída</p>
-                    <p className="text-sm text-muted-foreground">Análise de requisitos para o novo sistema</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <div className="min-w-24 text-sm text-muted-foreground">{formatDate("2023-05-05T14:30:00Z")}</div>
-                  <div>
-                    <p className="text-sm font-medium">Reunião realizada</p>
-                    <p className="text-sm text-muted-foreground">Apresentação do projeto e definição de escopo</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <div className="min-w-24 text-sm text-muted-foreground">{formatDate("2023-04-25T11:20:00Z")}</div>
-                  <div>
-                    <p className="text-sm font-medium">Cliente cadastrado</p>
-                    <p className="text-sm text-muted-foreground">Início da parceria</p>
-                  </div>
-                </div>
-              </div>
+              <p className="text-sm text-muted-foreground">Histórico real ainda não implementado.</p>
             </CardContent>
           </Card>
         </TabsContent>

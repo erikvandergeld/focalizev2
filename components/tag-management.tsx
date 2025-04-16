@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -41,17 +40,34 @@ export function TagManagement() {
   })
   const { toast } = useToast()
 
-  // Movido para useEffect para evitar acesso ao DOM durante SSR
   useEffect(() => {
-    const newTagButton = document.getElementById("new-tag-button")
-    if (newTagButton) {
-      const handleClick = () => handleOpenDialog()
-      newTagButton.addEventListener("click", handleClick)
-      return () => {
-        newTagButton.removeEventListener("click", handleClick)
+    const carregarTags = async () => {
+      try {
+        const response = await fetch("/api/tags")
+        const data = await response.json()
+
+        if (response.ok && data.success) {
+          setTags(data.tags)
+        } else {
+          toast({
+            title: "Erro",
+            description: "Erro ao buscar tags.",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("Erro ao buscar tags:", error)
+        toast({
+          title: "Erro",
+          description: "Erro ao se conectar com o servidor.",
+          variant: "destructive",
+        })
       }
     }
-  }, []) // Dependências vazias para executar apenas uma vez na montagem
+
+    carregarTags()
+  }, [])
+
 
   const resetForm = () => {
     setFormData({
@@ -88,9 +104,9 @@ export function TagManagement() {
     setFormData((prev) => ({ ...prev, color: e.target.value }))
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Validação
-    if (!formData.name) {
+    if (!formData.name.trim()) {
       toast({
         title: "Erro de validação",
         description: "O nome da tag é obrigatório.",
@@ -99,7 +115,7 @@ export function TagManagement() {
       return
     }
 
-    if (!formData.color) {
+    if (!formData.color.trim()) {
       toast({
         title: "Erro de validação",
         description: "Selecione uma cor para a tag.",
@@ -108,58 +124,131 @@ export function TagManagement() {
       return
     }
 
-    if (selectedTag) {
-      // Atualizar tag existente
-      setTags((prev) =>
-        prev.map((tag) =>
-          tag.id === selectedTag.id
-            ? {
-                ...tag,
-                name: formData.name,
-                color: formData.color,
-              }
-            : tag,
-        ),
-      )
-
-      toast({
-        title: "Tag atualizada",
-        description: `A tag "${formData.name}" foi atualizada com sucesso.`,
-      })
-    } else {
-      // Criar nova tag
-      const newTag: TagType = {
-        id: `tag-${Date.now()}`,
-        name: formData.name,
-        color: formData.color,
-        createdAt: new Date().toISOString(),
-      }
-
-      setTags((prev) => [...prev, newTag])
-
-      toast({
-        title: "Tag criada",
-        description: `A tag "${formData.name}" foi criada com sucesso.`,
-      })
+    const payload = {
+      name: formData.name,
+      color: formData.color,
     }
 
-    setIsDialogOpen(false)
-    resetForm()
+    try {
+      let response: Response
+      let data: { success: boolean; message?: string; tag?: TagType }
+
+
+      if (selectedTag) {
+        // Atualização (PUT)
+        response = await fetch(`/api/tags/${selectedTag.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${localStorage.getItem("token") || ""}`, // ✅ aqui
+          },
+          body: JSON.stringify(payload),
+        })
+        data = await response.json()
+
+
+        if (!response.ok || !data.success) {
+          toast({
+            title: "Erro",
+            description: data.message || "Erro ao atualizar a tag.",
+            variant: "destructive",
+          })
+          return
+        }
+
+
+        toast({
+          title: "Tag atualizada",
+          description: `A tag "${payload.name}" foi atualizada com sucesso.`,
+        })
+
+        setTags((prev) =>
+          prev.map((tag) => (tag.id === selectedTag.id ? { ...tag, ...payload } : tag)),
+        )
+
+      } else {
+        // Criação (POST)
+        const id = `tag-${Date.now()}`
+        response = await fetch("/api/tags", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${localStorage.getItem("token") || ""}`, // ✅ aqui
+          },
+          body: JSON.stringify({ ...payload, id }),
+        })
+        data = await response.json()
+
+        if (!response.ok || !data.success) {
+          toast({
+            title: "Erro",
+            description: data.message || "Erro ao cadastrar a tag.",
+            variant: "destructive",
+          })
+          return
+        }
+
+        setTags((prev) => [...prev, data.tag!])
+
+
+        toast({
+          title: "Tag criada",
+          description: `A tag "${payload.name}" foi criada com sucesso.`,
+        })
+
+      }
+
+      setIsDialogOpen(false)
+      resetForm()
+    } catch (error) {
+      console.error("Erro ao salvar tag:", error)
+      toast({
+        title: "Erro",
+        description: "Erro ao se conectar com o servidor.",
+        variant: "destructive",
+      })
+    }
   }
 
-  const handleDeleteTag = () => {
+
+  const handleDeleteTag = async () => {
     if (!selectedTag) return
 
-    setTags((prev) => prev.filter((tag) => tag.id !== selectedTag.id))
+    try {
+      const response = await fetch(`/api/tags/${selectedTag.id}`, {
+        method: "DELETE",
+      })
 
-    toast({
-      title: "Tag excluída",
-      description: `A tag "${selectedTag.name}" foi excluída com sucesso.`,
-    })
+      const data = await response.json()
 
-    setIsDeleteDialogOpen(false)
-    setSelectedTag(null)
+      if (!response.ok || !data.success) {
+        toast({
+          title: "Erro",
+          description: data.message || "Erro ao excluir a tag.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      setTags((prev) => prev.filter((tag) => tag.id !== selectedTag.id))
+
+      toast({
+        title: "Tag excluída",
+        description: `A tag "${selectedTag.name}" foi excluída com sucesso.`,
+      })
+
+      setIsDeleteDialogOpen(false)
+      setSelectedTag(null)
+    } catch (error) {
+      console.error("Erro ao excluir tag:", error)
+      toast({
+        title: "Erro",
+        description: "Erro ao se conectar com o servidor.",
+        variant: "destructive",
+      })
+    }
   }
+
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)

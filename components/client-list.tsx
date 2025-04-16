@@ -8,6 +8,11 @@ import { useState } from "react"
 import { ConfirmDialog } from "./confirm-dialog"
 import { useNotifications } from "./notification-provider"
 import { useToast } from "@/components/ui/use-toast"
+import { useEffect } from "react"
+
+// ...
+
+
 
 // Dados de exemplo
 const initialClients: any[] = []
@@ -28,6 +33,27 @@ export function ClientList() {
       year: "numeric",
     }).format(date)
   }
+  
+  useEffect(() => {
+    const carregarClientes = async () => {
+      try {
+        const response = await fetch("/api/clientes")
+        const data = await response.json()
+  
+        if (response.ok && data.success && Array.isArray(data.clientes)) {
+          setClients(data.clientes)
+        } else {
+          setClients([]) // ✅ evita undefined
+        }
+      } catch (error) {
+        console.error("Erro ao carregar clientes:", error)
+        setClients([]) // ✅ fallback seguro
+      }
+    }
+  
+    carregarClientes()
+  }, [toast])
+  
 
   const handleView = (id: string) => {
     router.push(`/dashboard/clients/${id}`)
@@ -42,21 +68,46 @@ export function ClientList() {
     setDeleteDialogOpen(true)
   }
 
-  const handleDeleteClient = () => {
+  const handleDeleteClient = async () => {
     if (!selectedClient) return
 
-    setClients((prev) => prev.filter((client) => client.id !== selectedClient.id))
+    try {
+      const response = await fetch(`/api/clientes/${selectedClient.id}`, {
+        method: "DELETE",
+      })
+      const data = await response.json()
 
-    toast({
-      title: "Cliente excluído",
-      description: `O cliente "${selectedClient.name}" foi excluído com sucesso.`,
-    })
+      if (!response.ok || !data.success) {
+        toast({
+          title: "Erro",
+          description: data.message || "Erro ao excluir cliente.",
+          variant: "destructive",
+        })
+        return
+      }
 
-    addNotification("Cliente excluído", `O cliente "${selectedClient.name}" foi excluído do sistema.`)
+      toast({
+        title: "Cliente excluído",
+        description: `O cliente "${selectedClient.name}" foi excluído com sucesso.`,
+      })
 
-    setDeleteDialogOpen(false)
-    setSelectedClient(null)
+      addNotification("Cliente excluído", `O cliente "${selectedClient.name}" foi excluído do sistema.`)
+
+      // Atualizar lista local
+      setClients((prev) => prev.filter((client) => client.id !== selectedClient.id))
+      setDeleteDialogOpen(false)
+      setSelectedClient(null)
+
+    } catch (error) {
+      console.error("Erro ao excluir cliente:", error)
+      toast({
+        title: "Erro",
+        description: "Erro ao se conectar com o servidor.",
+        variant: "destructive",
+      })
+    }
   }
+
 
   return (
     <>

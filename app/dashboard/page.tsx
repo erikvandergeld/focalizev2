@@ -4,10 +4,12 @@ import { TaskListView } from "@/components/task-list-view"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Plus } from "lucide-react"
+import { ProtectedRoute } from "@/components/protected-route"  // Importando ProtectedRoute
 import Link from "next/link"
 
 export default function DashboardPage() {
   return (
+    <ProtectedRoute>
     <div className="flex flex-col gap-6 w-full">
       <DashboardHeader heading="Dashboard" text="Gerencie suas tarefas e acompanhe o progresso dos seus projetos.">
         <Link href="/dashboard/tasks/new">
@@ -32,5 +34,6 @@ export default function DashboardPage() {
         </TabsContent>
       </Tabs>
     </div>
+    </ProtectedRoute>
   )
 }

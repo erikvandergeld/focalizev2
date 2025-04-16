@@ -35,38 +35,56 @@ export function ClientForm({ clientId }: ClientFormProps) {
   // Remover os dados de exemplo para entidades
   const [availableEntities, setAvailableEntities] = useState<{ id: string; name: string }[]>([])
 
-  // Adicionar useEffect para carregar entidades (simulação)
   useEffect(() => {
-    // Em um sistema real, isso seria uma chamada à API
-    // Por enquanto, deixamos vazio para ser preenchido pelo backend
     const loadEntities = async () => {
-      // Simulação de carregamento de dados
-      await new Promise((resolve) => setTimeout(resolve, 300))
-      // Deixamos vazio para ser preenchido pelo backend
-      setAvailableEntities([])
+      try {
+        const response = await fetch("/api/entidades")
+        const data = await response.json()
+
+        if (response.ok && data.success && Array.isArray(data.entidades)) {
+          setAvailableEntities(data.entidades)
+        } else {
+          toast({
+            title: "Erro ao carregar entidades",
+            description: data.message || "Não foi possível carregar as entidades.",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("Erro ao buscar entidades:", error)
+        toast({
+          title: "Erro ao carregar entidades",
+          description: "Erro ao se conectar com o servidor.",
+          variant: "destructive",
+        })
+      }
     }
 
     loadEntities()
-  }, [])
+  }, [toast])
+
 
   // Carregar dados do cliente se estiver editando
   useEffect(() => {
     if (clientId) {
       const loadClient = async () => {
         try {
-          // Simulação de carregamento de dados
-          await new Promise((resolve) => setTimeout(resolve, 500))
+          const response = await fetch(`/api/clientes/${clientId}`)
+          const data = await response.json()
 
-          const client = clientsData[clientId as keyof typeof clientsData]
-          if (client) {
-            setName(client.name)
-            setEmail(client.email)
-            setPhone(client.phone)
-            setCompany(client.company)
-            setNotes(client.notes)
-            setSelectedEntities(client.entities)
+          if (!response.ok || !data.success || !data.client) {
+            throw new Error(data.message || "Erro ao buscar cliente.")
           }
+
+          const client = data.client
+          setName(client.name || "")
+          setEmail(client.email || "")
+          setPhone(client.phone || "")
+          setCompany(client.company || "")
+          setNotes(client.notes || "")
+          setSelectedEntities(Array.isArray(client.entities) ? client.entities : [])
         } catch (error) {
+          console.error("Erro ao carregar cliente:", error)
           toast({
             title: "Erro ao carregar cliente",
             description: "Não foi possível carregar os dados do cliente.",
@@ -81,6 +99,8 @@ export function ClientForm({ clientId }: ClientFormProps) {
     }
   }, [clientId, toast])
 
+  
+
   const toggleEntity = (entityId: string) => {
     setSelectedEntities((prev) =>
       prev.includes(entityId) ? prev.filter((id) => id !== entityId) : [...prev, entityId],
@@ -90,7 +110,7 @@ export function ClientForm({ clientId }: ClientFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (selectedEntities.length === 0 && availableEntities.length > 0) {
+    if (selectedEntities.length === 0) {
       toast({
         title: "Erro de validação",
         description: "Selecione pelo menos uma entidade para o cliente.",
@@ -99,52 +119,66 @@ export function ClientForm({ clientId }: ClientFormProps) {
       return
     }
 
+    if (!name.trim() || !email.trim() || !phone.trim()) {
+      toast({
+        title: "Erro de validação",
+        description: "Preencha todos os campos obrigatórios.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsLoading(true)
 
+    const payload = {
+      id: clientId || `client-${Date.now()}`,
+      name,
+      email,
+      phone,
+      company: company || "",
+      notes: notes || "",
+      entities: selectedEntities,
+    }
+
     try {
-      // Simulação de envio para API
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const response = await fetch(`/api/clientes${clientId ? `/${clientId}` : ""}`, {
+        method: clientId ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token") || ""}`, // ✅ aqui
+        },
+        body: JSON.stringify(payload),
+      })
 
-      // Obter os nomes das entidades selecionadas
-      const entityNames = selectedEntities
-        .map((id) => availableEntities.find((e) => e.id === id)?.name)
-        .filter(Boolean)
-        .join(", ")
+      const data = await response.json()
 
-      if (clientId) {
+      if (!response.ok || !data.success) {
         toast({
-          title: "Cliente atualizado com sucesso",
-          description: "As informações do cliente foram atualizadas.",
+          title: "Erro",
+          description: data.message || "Erro ao salvar o cliente.",
+          variant: "destructive",
         })
-
-        // Adicionar notificação
-        addNotification("Cliente atualizado", `O cliente "${name}" foi atualizado com sucesso.`)
-
-        router.push(`/dashboard/clients/${clientId}`)
-      } else {
-        toast({
-          title: "Cliente cadastrado com sucesso",
-          description: "O cliente foi adicionado ao sistema.",
-        })
-
-        // Adicionar notificação
-        addNotification(
-          "Novo cliente cadastrado",
-          `O cliente "${name}" foi cadastrado com sucesso${entityNames ? ` para as entidades: ${entityNames}` : ""}.`,
-        )
-
-        router.push("/dashboard/clients")
+        return
       }
-    } catch (error) {
+
       toast({
-        title: clientId ? "Erro ao atualizar cliente" : "Erro ao cadastrar cliente",
-        description: "Ocorreu um erro. Tente novamente.",
+        title: clientId ? "Cliente atualizado" : "Cliente cadastrado",
+        description: data.message,
+      })
+
+      router.push("/dashboard/clients")
+    } catch (error) {
+      console.error("Erro ao salvar cliente:", error)
+      toast({
+        title: "Erro",
+        description: "Erro ao se conectar com o servidor.",
         variant: "destructive",
       })
     } finally {
       setIsLoading(false)
     }
   }
+
 
   if (isLoadingData) {
     return <div className="flex justify-center p-4">Carregando...</div>
@@ -214,6 +248,7 @@ export function ClientForm({ clientId }: ClientFormProps) {
         <Button type="submit" disabled={isLoading || (selectedEntities.length === 0 && availableEntities.length > 0)}>
           {isLoading ? "Salvando..." : clientId ? "Atualizar cliente" : "Salvar cliente"}
         </Button>
+
       </div>
     </form>
   )
