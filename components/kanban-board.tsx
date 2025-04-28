@@ -1,5 +1,4 @@
 "use client"
-
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -52,12 +51,12 @@ type Task = {
   title: string
   description: string
   client: string
-  assignee: string
+  assignee: { id: string; full_name: string } | string | null  // 👈 atualizado
   entity: string
   project: string | null
-  isAdministrative: boolean
+  taskType: "administrative" | "technical"
   comments: Comment[]
-  status: string
+  status: "pending" | "in-progress" | "completed"
   completedAt: string | null
   archivedAt: string | null
   tags: TagType[]
@@ -69,75 +68,12 @@ type Column = {
   tasks: Task[]
 }
 
-// Dados de exemplo para os filtros
-const clients = [
-  { id: "1", name: "Acme Inc" },
-  { id: "2", name: "TechCorp" },
-  { id: "3", name: "WebSolutions" },
-  { id: "4", name: "DataSys" },
-]
-
-const users = [
-  { id: "1", name: "Erick Silva" },
-  { id: "2", name: "Lucas Gomes" },
-  { id: "3", name: "Breno Christian" },
-  { id: "4", name: "Lucas Santos" },
-  { id: "5", name: "André Borges" },
-  { id: "6", name: "Aline Borges" },
-  { id: "7", name: "Benone França" },
-  { id: "8", name: "Luan França" },
-  { id: "9", name: "Luanna Barreto" },
-]
-
-const entities = [
-  { id: "ingline", name: "Ingline Systems" },
-  { id: "line_movel", name: "Line Movel" },
-  { id: "macrophony", name: "Macrophony" },
-  { id: "voicenet", name: "Voicenet" },
-  { id: "connyctel", name: "Connyctel" },
-]
-
-const projects = [
-  { id: "1", name: "Redesenho de Website" },
-  { id: "2", name: "Migração de Servidor" },
-  { id: "3", name: "Aplicativo Mobile" },
-  { id: "4", name: "Integração VoIP" },
-]
-
-// Dados de exemplo para tags
-const sampleTags = [
-  { id: "tag-1", name: "Urgente", color: "#EF4444" },
-  { id: "tag-2", name: "Bug", color: "#F97316" },
-  { id: "tag-3", name: "Melhoria", color: "#22C55E" },
-  { id: "tag-4", name: "Documentação", color: "#3B82F6" },
-  { id: "tag-5", name: "Design", color: "#A855F7" },
-]
-
-// Dados de exemplo com comentários
-const initialData: { columns: Column[] } = {
-  columns: [
-    {
-      id: "pending",
-      title: "Pendentes",
-      tasks: [],
-    },
-    {
-      id: "in-progress",
-      title: "Em andamento",
-      tasks: [],
-    },
-    {
-      id: "completed",
-      title: "Finalizadas",
-      tasks: [],
-    },
-  ],
-}
 
 // Helper function to determine if text should be white or black based on background color
 const getContrastColor = (hexColor: string) => {
   // Remove the hash if it exists
   const color = hexColor.charAt(0) === "#" ? hexColor.substring(1, 7) : hexColor
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([])
   // Convert to RGB
   const r = Number.parseInt(color.substring(0, 2), 16)
   const g = Number.parseInt(color.substring(2, 4), 16)
@@ -164,10 +100,7 @@ function SortableTaskCard({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
-    data: {
-      type: "task",
-      task,
-    },
+    data: { type: "task", task },
   })
 
   const style = {
@@ -177,31 +110,35 @@ function SortableTaskCard({
     zIndex: isDragging ? 1 : 0,
   }
 
-  // Renderizar tags como badges coloridos com ícone
   const renderTaskTags = (tags: TagType[]) => {
-    if (!tags || tags.length === 0) return null
-
-    return (
+    return tags?.length ? (
       <div className="flex flex-wrap gap-1 mb-2">
-        {tags.map((tag) => {
-          const textColor = getContrastColor(tag.color)
-          return (
-            <span
-              key={tag.id}
-              className="px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1.5"
-              style={{
-                backgroundColor: tag.color,
-                color: textColor,
-              }}
-            >
-              <Tag className="h-3 w-3" />
-              {tag.name}
-            </span>
-          )
-        })}
+        {tags.map((tag) => (
+          <span
+            key={tag.id}
+            className="px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1.5"
+            style={{
+              backgroundColor: tag.color,
+              color: getContrastColor(tag.color),
+            }}
+          >
+            <Tag className="h-3 w-3" />
+            {tag.name}
+          </span>
+        ))}
       </div>
-    )
+    ) : null
   }
+
+  const assigneeName =
+    typeof task.assignee === "string"
+      ? task.assignee
+      : task.assignee?.full_name || "Sem responsável"
+
+  const assigneeInitials = assigneeName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
 
   return (
     <div
@@ -223,54 +160,46 @@ function SortableTaskCard({
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Ações</DropdownMenuLabel>
             <DropdownMenuItem onClick={() => onOpenEditDialog(task)}>
-              <Pencil className="h-4 w-4 mr-2" />
-              Editar
+              <Pencil className="h-4 w-4 mr-2" /> Editar
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onOpenCommentDialog(task)}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Comentários
+              <MessageSquare className="h-4 w-4 mr-2" /> Comentários
             </DropdownMenuItem>
-
-            {/* Mostrar opção de arquivar apenas para tarefas concluídas */}
             {task.status === "completed" && (
               <DropdownMenuItem onClick={() => onOpenArchiveDialog(task)}>
-                <Archive className="h-4 w-4 mr-2" />
-                Arquivar
+                <Archive className="h-4 w-4 mr-2" /> Arquivar
               </DropdownMenuItem>
             )}
-
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-destructive" onClick={() => onOpenDeleteDialog(task)}>
-              <Trash2 className="h-4 w-4 mr-2" />
-              Excluir
+              <Trash2 className="h-4 w-4 mr-2" /> Excluir
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
       <div className="flex flex-wrap gap-1 mb-2">
-        <span className="text-xs font-medium px-2 py-1 bg-primary/10 text-primary rounded-full">{task.client}</span>
-        <Badge variant={task.isAdministrative ? "default" : "secondary"} className="text-xs">
-          {task.isAdministrative ? "Administrativo" : "Técnico"}
+        <span className="text-xs font-medium px-2 py-1 bg-primary/10 text-primary rounded-full">
+          {task.client}
+        </span>
+        <Badge variant={task.taskType === "administrative" ? "default" : "secondary"} className="text-xs">
+          {task.taskType === "administrative" ? "Administrativo" : "Técnico"}
         </Badge>
       </div>
+
       {renderTaskTags(task.tags)}
       <p className="text-xs text-muted-foreground mb-3">{task.description}</p>
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Avatar className="h-6 w-6">
-            <AvatarFallback className="text-xs">
-              {task.assignee
-                .split(" ")
-                .map((n) => n[0])
-                .join("")}
-            </AvatarFallback>
+            <AvatarFallback className="text-xs">{assigneeInitials}</AvatarFallback>
           </Avatar>
-          <span className="text-xs">{task.assignee}</span>
+          <span className="text-sm">{assigneeName}</span>
         </div>
+
         <div className="flex items-center gap-1">
-          <Badge variant="outline" className="text-xs">
-            {task.entity}
-          </Badge>
+          <Badge variant="outline" className="text-xs">{task.entity}</Badge>
           <Button
             variant="ghost"
             size="sm"
@@ -349,10 +278,23 @@ function DroppableColumn({
 }
 
 export function KanbanBoard() {
-  const [data, setData] = useState(initialData)
+  const [data, setData] = useState<{ columns: Column[] }>({
+    columns: [
+      { id: "pending", title: "Pendentes", tasks: [] },
+      { id: "in-progress", title: "Em andamento", tasks: [] },
+      { id: "completed", title: "Finalizadas", tasks: [] },
+    ],
+  })
+
   const [filters, setFilters] = useState<any>({})
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([])
+  const [clients, setClients] = useState<{ id: string; name: string }[]>([])
+  const [users, setUsers] = useState<{ id: string; name: string }[]>([])
+  const [entities, setEntities] = useState<{ id: string; name: string }[]>([])
+
   const { addNotification } = useNotifications()
   const { user } = useAuth()
+
   const [commentDialogOpen, setCommentDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -361,8 +303,64 @@ export function KanbanBoard() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [activeTask, setActiveTask] = useState<Task | null>(null)
 
-  // Referência para rastrear se o componente está montado
   const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const token = localStorage.getItem("token")
+        const headers = { Authorization: `Bearer ${token}` }
+
+        const [tasksRes, projectsRes, clientsRes, usersRes, entitiesRes] = await Promise.all([
+          fetch("/api/tarefas", { headers }),
+          fetch("/api/projetos", { headers }),
+          fetch("/api/clientes", { headers }),
+          fetch("/api/usuarios", { headers }),
+          fetch("/api/entidades", { headers }),
+        ])
+
+        const [tasksData, projectsData, clientsData, usersData, entitiesData] = await Promise.all([
+          tasksRes.json(),
+          projectsRes.json(),
+          clientsRes.json(),
+          usersRes.json(),
+          entitiesRes.json(),
+        ])
+
+        if (tasksData.success) {
+          const pending: Task[] = []
+          const inProgress: Task[] = []
+          const completed: Task[] = []
+
+          for (const task of tasksData.tasks) {
+            if (task.status === "pending") pending.push(task)
+            else if (task.status === "in-progress") inProgress.push(task)
+            else if (task.status === "completed") completed.push(task)
+          }
+
+          setData({
+            columns: [
+              { id: "pending", title: "Pendentes", tasks: pending },
+              { id: "in-progress", title: "Em andamento", tasks: inProgress },
+              { id: "completed", title: "Finalizadas", tasks: completed },
+            ],
+          })
+        }
+
+        if (projectsData.success) setProjects(projectsData.projetos || [])
+        if (clientsData.success) setClients(clientsData.clientes || [])
+        if (usersData.success) setUsers(usersData.usuarios || [])
+        if (entitiesData.success) setEntities(entitiesData.entidades || [])
+
+      } catch (error) {
+        console.error("Erro ao carregar dados:", error)
+      }
+    }
+
+    fetchData()
+  }, [])
+
+
 
   // Limpar referências quando o componente for desmontado
   useEffect(() => {
@@ -383,83 +381,91 @@ export function KanbanBoard() {
     }),
   )
 
-  // Função para aplicar filtros
   const applyFilters = useCallback(
     (task: Task) => {
-      // Se não há filtros, retorna true
       if (!filters || Object.keys(filters).length === 0) {
         return true
       }
 
-      // Filtrar por texto de busca
+      const assigneeName =
+        typeof task.assignee === "string"
+          ? task.assignee
+          : task.assignee?.full_name || ""
+
+      const assigneeId =
+        typeof task.assignee === "object" && task.assignee?.id
+          ? task.assignee.id
+          : typeof task.assignee === "string"
+            ? task.assignee
+            : ""
+
+      const projectName = typeof task.project === "string" ? task.project : ""
+
+      // 🔍 Filtro por busca textual
       if (filters.search && filters.search.trim() !== "") {
         const searchTerm = filters.search.toLowerCase()
         const matchesSearch =
           task.title.toLowerCase().includes(searchTerm) ||
           task.description.toLowerCase().includes(searchTerm) ||
           task.client.toLowerCase().includes(searchTerm) ||
-          task.assignee.toLowerCase().includes(searchTerm) ||
+          assigneeName.toLowerCase().includes(searchTerm) ||
           task.entity.toLowerCase().includes(searchTerm) ||
-          (task.project && task.project.toLowerCase().includes(searchTerm)) ||
+          projectName.toLowerCase().includes(searchTerm) ||
           task.tags.some((tag) => tag.name.toLowerCase().includes(searchTerm))
 
         if (!matchesSearch) return false
       }
 
-      // Filtrar por cliente
-      if (filters.clients && filters.clients.length > 0) {
+      // 👥 Filtro por clientes
+      if (filters.clients?.length) {
         const clientNames = filters.clients.map((id: string) => {
           const client = clients.find((c) => c.id === id)
-          return client ? client.name : ""
+          return client?.name || ""
         })
         if (!clientNames.includes(task.client)) return false
       }
 
-      // Filtrar por responsável
-      if (filters.users && filters.users.length > 0) {
-        const userNames = filters.users.map((id: string) => {
-          const user = users.find((u) => u.id === id)
-          return user ? user.name : ""
-        })
-        if (!userNames.includes(task.assignee)) return false
+      // 👤 Filtro por responsáveis
+      if (filters.users?.length) {
+        if (!filters.users.includes(assigneeId)) return false
       }
 
-      // Filtrar por entidade
-      if (filters.entities && filters.entities.length > 0) {
+      // 🏢 Filtro por entidades
+      if (filters.entities?.length) {
         const entityNames = filters.entities.map((id: string) => {
           const entity = entities.find((e) => e.id === id)
-          return entity ? entity.name : ""
+          return entity?.name || ""
         })
         if (!entityNames.includes(task.entity)) return false
       }
 
-      // Filtrar por tipo de tarefa
-      if (filters.taskTypes && filters.taskTypes.length > 0) {
+      // 🔧 Filtro por tipo de tarefa
+      if (filters.taskTypes?.length) {
         const isAdministrative = filters.taskTypes.includes("administrative")
         const isTechnical = filters.taskTypes.includes("technical")
 
-        if (isAdministrative && !isTechnical && !task.isAdministrative) return false
-        if (!isAdministrative && isTechnical && task.isAdministrative) return false
+        if (isAdministrative && !isTechnical && task.taskType !== "administrative") return false
+        if (!isAdministrative && isTechnical && task.taskType !== "technical") return false
       }
 
-      // Filtrar por projeto
-      if (filters.projects && filters.projects.length > 0) {
+      // 📁 Filtro por projeto
+      if (filters.projects?.length) {
         const projectNames = filters.projects.map((id: string) => {
           const project = projects.find((p) => p.id === id)
-          return project ? project.name : ""
+          return project?.name || ""
         })
-        if (!task.project || !projectNames.includes(task.project)) return false
+        if (!projectName || !projectNames.includes(projectName)) return false
       }
 
-      // Filtrar por tags
-      if (filters.tags && filters.tags.length > 0) {
+      // 🏷️ Filtro por tags
+      if (filters.tags?.length) {
         const hasMatchingTag = task.tags.some((tag) => filters.tags.includes(tag.id))
         if (!hasMatchingTag) return false
       }
 
       return true
     },
-    [filters],
+    [filters, clients, users, entities, projects]
   )
 
   // Filtrar dados com base nos filtros
@@ -562,69 +568,107 @@ export function KanbanBoard() {
     setArchiveDialogOpen(true)
   }, [])
 
-  // Função para adicionar um comentário
-  const handleAddComment = useCallback((taskId: string, commentText: string) => {
-    const newComment: Comment = {
-      id: `comment-${Date.now()}`,
-      text: commentText,
-      author: "Usuário Teste", // Em um sistema real, seria o usuário logado
-      createdAt: new Date(),
+
+  const handleAddComment = async (taskId: string, commentText: string) => {
+    if (!user) {
+      addNotification("Erro", "Você precisa estar logado para adicionar um comentário.");
+      return;
     }
 
-    setData((prevData) => {
-      const updatedColumns = prevData.columns.map((column) => {
-        const updatedTasks = column.tasks.map((task) => {
-          if (task.id === taskId) {
-            return {
-              ...task,
-              comments: [newComment, ...task.comments],
-            }
-          }
-          return task
-        })
-        return {
-          ...column,
-          tasks: updatedTasks,
-        }
-      })
-      return { columns: updatedColumns }
-    })
-  }, [])
+    const token = localStorage.getItem("token");
+    const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
-  // Função para salvar as alterações de uma tarefa
-  const handleSaveTask = useCallback((taskId: string, updatedTask: any) => {
-    setData((prevData) => {
-      const updatedColumns = prevData.columns.map((column) => {
-        // Se a tarefa mudou de status, precisamos movê-la para a coluna correta
-        if (updatedTask.status !== column.id) {
+    // Criação do comentário localmente
+    const newComment: Comment = {
+      id: `comment-${Date.now()}`, // Gerando um ID único para o comentário
+      text: commentText,
+      author: user.name, // Usando o nome do usuário logado
+      createdAt: new Date(),
+    };
+
+    try {
+      // Enviar o comentário para o backend
+      const response = await fetch(`/api/tarefas/${taskId}/comentarios`, {
+        method: "POST",
+        headers: headers,
+        body: JSON.stringify({ text: commentText, author: user.name }), // Usando o ID do usuário logado
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Erro ao adicionar comentário.");
+      }
+
+      // Atualizar localmente a lista de tarefas com o novo comentário
+      setData((prevData) => {
+        const updatedColumns = prevData.columns.map((column) => {
+          const updatedTasks = column.tasks.map((task) => {
+            if (task.id === taskId) {
+              return {
+                ...task,
+                comments: [newComment, ...task.comments], // Adicionando o novo comentário na lista de comentários da tarefa
+              };
+            }
+            return task;
+          });
+          return { ...column, tasks: updatedTasks };
+        });
+        return { columns: updatedColumns };
+      });
+
+      // Atualizar a lista de comentários no componente pai (passando para o Dialog)
+      setSelectedTask((prevTask) => {
+        if (prevTask && prevTask.id === taskId) {
           return {
-            ...column,
-            tasks: column.tasks.filter((task) => task.id !== taskId),
-          }
+            ...prevTask,
+            comments: [newComment, ...prevTask.comments],
+          };
         }
+        return prevTask;
+      });
 
-        // Atualizar a tarefa na coluna correta
-        if (column.id === updatedTask.status) {
-          const taskExists = column.tasks.some((task) => task.id === taskId)
+    } catch (error) {
+      console.error("Erro ao adicionar comentário:", error);
+      addNotification("Erro ao adicionar comentário", "Não foi possível adicionar o comentário.");
+    }
+  };
 
-          if (taskExists) {
-            return {
-              ...column,
-              tasks: column.tasks.map((task) => (task.id === taskId ? { ...task, ...updatedTask } : task)),
-            }
-          } else {
-            return {
-              ...column,
-              tasks: [...column.tasks, updatedTask],
-            }
-          }
-        }
+  const handleSaveTask = async (taskId: string, updatedTask: any) => {
+    console.log("Atualizando tarefa:", taskId, updatedTask);  // Log para depuração
 
-        return column
+    const token = localStorage.getItem("token")
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    }
+
+    try {
+      const response = await fetch(`/api/tarefas/${taskId}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify(updatedTask),  // Certifique-se de que o ID do cliente está sendo enviado
       })
-      return { columns: updatedColumns }
-    })
-  }, [])
+
+      const data = await response.json()
+
+      console.log("Resposta do servidor:", data);  // Log da resposta
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Erro ao atualizar tarefa.")
+      }
+
+
+      // Se a atualização for bem-sucedida, retorna para o diálogo
+      addNotification("Tarefa atualizada", `A tarefa "${updatedTask.title}" foi atualizada.`)
+      return true
+    } catch (error) {
+      console.error("Erro ao atualizar tarefa:", error)
+      addNotification("Erro ao atualizar tarefa", "Não foi possível atualizar a tarefa. Tente novamente.")
+      throw error
+    }
+  }
+
 
   // Função para excluir uma tarefa
   const handleDeleteTask = useCallback(() => {
@@ -703,177 +747,162 @@ export function KanbanBoard() {
     // para lidar com a detecção de coluna
   }, [])
 
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event
 
-      if (!over) {
-        setActiveId(null)
-        setActiveTask(null)
-        return
+    if (!over) {
+      setActiveId(null)
+      setActiveTask(null)
+      return
+    }
+
+    const activeId = active.id as string
+    const overId = over.id as string
+
+    const { task: activeTask, column: activeColumn } = findTaskById(activeId)
+    if (!activeTask || !activeColumn) {
+      setActiveId(null)
+      setActiveTask(null)
+      return
+    }
+
+    const isOverColumn = data.columns.some((col) => col.id === overId)
+
+    if (isOverColumn) {
+      if (activeColumn.id !== overId) {
+        const updatedTask: Task = {
+          ...activeTask,
+          status: overId as Task["status"],
+          completedAt: overId === "completed" && !activeTask.completedAt ? new Date().toISOString() : activeTask.completedAt,
+        }
+
+        setData((prev) => {
+          const updatedColumns = prev.columns.map((column) => {
+            if (column.id === activeColumn.id) {
+              return {
+                ...column,
+                tasks: column.tasks.filter((task) => task.id !== activeId),
+              }
+            }
+            if (column.id === overId) {
+              return {
+                ...column,
+                tasks: [...column.tasks, updatedTask],
+              }
+            }
+            return column
+          })
+
+          return { columns: updatedColumns }
+        })
+
+        try {
+          const token = localStorage.getItem("token")
+          await fetch(`/api/tarefas/${activeTask.id}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              status: overId,
+              completedAt: updatedTask.completedAt,
+            }),
+          })
+        } catch (err) {
+          console.error("Erro ao atualizar status da tarefa:", err)
+        }
+
+        const targetColumn = data.columns.find((col) => col.id === overId)
+        if (targetColumn) {
+          setTimeout(() => {
+            if (!isMountedRef.current) return
+            addNotification("Status de tarefa atualizado", `A tarefa "${activeTask.title}" foi movida para ${targetColumn.title}.`)
+          }, 0)
+        }
       }
+    } else {
+      const { task: overTask, column: overColumn } = findTaskById(overId)
 
-      const activeId = active.id as string
-      const overId = over.id as string
-
-      // Encontrar a tarefa ativa
-      const { task: activeTask, column: activeColumn } = findTaskById(activeId)
-
-      // Se não encontrou a tarefa ou coluna, retornar
-      if (!activeTask || !activeColumn) {
-        setActiveId(null)
-        setActiveTask(null)
-        return
-      }
-
-      // Verificar se o overId é uma coluna
-      const isOverColumn = data.columns.some((column) => column.id === overId)
-
-      if (isOverColumn) {
-        // Mover para outra coluna
-        if (activeColumn.id !== overId) {
+      if (overTask && overColumn) {
+        if (activeColumn.id === overColumn.id) {
+          // Reordenar dentro da mesma coluna
           setData((prev) => {
-            // Remover a tarefa da coluna atual
-            const updatedColumns = prev.columns.map((column) => {
-              if (column.id === activeColumn.id) {
+            const updatedColumns = prev.columns.map((col) => {
+              if (col.id !== activeColumn.id) return col
+
+              const oldIndex = col.tasks.findIndex((task) => task.id === activeId)
+              const newIndex = col.tasks.findIndex((task) => task.id === overId)
+              if (oldIndex === -1 || newIndex === -1) return col
+
+              const reordered = arrayMove(col.tasks, oldIndex, newIndex)
+              return { ...col, tasks: reordered }
+            })
+
+            return { columns: updatedColumns }
+          })
+        } else {
+          // Mover entre colunas e inserir em posição específica
+          const updatedTask: Task = {
+            ...activeTask,
+            status: overColumn.id as Task["status"],
+            completedAt: overColumn.id === "completed" && !activeTask.completedAt
+              ? new Date().toISOString()
+              : activeTask.completedAt,
+          }
+
+          setData((prev) => {
+            const updatedColumns = prev.columns.map((col) => {
+              if (col.id === activeColumn.id) {
                 return {
-                  ...column,
-                  tasks: column.tasks.filter((task) => task.id !== activeId),
+                  ...col,
+                  tasks: col.tasks.filter((task) => task.id !== activeId),
                 }
               }
 
-              if (column.id === overId) {
-                // Atualizar o status da tarefa
-                const updatedTask = {
-                  ...activeTask,
-                  status: overId,
-                  // Se a tarefa está sendo movida para "completed", definir completedAt
-                  completedAt:
-                    overId === "completed" && !activeTask.completedAt
-                      ? new Date().toISOString()
-                      : activeTask.completedAt,
-                }
-
+              if (col.id === overColumn.id) {
+                const insertAt = col.tasks.findIndex((task) => task.id === overId)
+                const updatedTasks = [...col.tasks]
+                updatedTasks.splice(insertAt, 0, updatedTask)
                 return {
-                  ...column,
-                  tasks: [...column.tasks, updatedTask],
+                  ...col,
+                  tasks: updatedTasks,
                 }
               }
 
-              return column
+              return col
             })
 
             return { columns: updatedColumns }
           })
 
-          // Notificar sobre a mudança de coluna
-          const targetColumn = data.columns.find((col) => col.id === overId)
-          if (targetColumn) {
-            setTimeout(() => {
-              if (!isMountedRef.current) return
-
-              addNotification(
-                "Status de tarefa atualizado",
-                `A tarefa "${activeTask.title}" para o cliente ${activeTask.client} foi movida para ${targetColumn.title}.`,
-              )
-            }, 0)
-          }
-        } else {
-          // Tarefa solta na mesma coluna, não fazer nada
-        }
-      } else {
-        // Verificar se o overId é uma tarefa
-        const { task: overTask, column: overColumn } = findTaskById(overId)
-
-        if (overTask && overColumn) {
-          if (activeColumn.id === overColumn.id) {
-            // Reordenar na mesma coluna
-            setData((prev) => {
-              const column = prev.columns.find((col) => col.id === activeColumn.id)
-              if (!column) return prev
-
-              const oldIndex = column.tasks.findIndex((task) => task.id === activeId)
-              const newIndex = column.tasks.findIndex((task) => task.id === overId)
-
-              if (oldIndex === -1 || newIndex === -1) return prev
-
-              const updatedTasks = arrayMove(column.tasks, oldIndex, newIndex)
-
-              return {
-                columns: prev.columns.map((col) => {
-                  if (col.id === column.id) {
-                    return { ...col, tasks: updatedTasks }
-                  }
-                  return col
-                }),
-              }
-            })
-          } else {
-            // Mover para outra coluna
-            setData((prev) => {
-              // Remover a tarefa da coluna atual
-              const updatedColumns = prev.columns.map((column) => {
-                if (column.id === activeColumn.id) {
-                  return {
-                    ...column,
-                    tasks: column.tasks.filter((task) => task.id !== activeId),
-                  }
-                }
-
-                if (column.id === overColumn.id) {
-                  // Atualizar o status da tarefa
-                  const updatedTask = {
-                    ...activeTask,
-                    status: overColumn.id,
-                    // Se a tarefa está sendo movida para "completed", definir completedAt
-                    completedAt:
-                      overColumn.id === "completed" && !activeTask.completedAt
-                        ? new Date().toISOString()
-                        : activeTask.completedAt,
-                  }
-
-                  // Encontrar o índice da tarefa sobre a qual estamos soltando
-                  const overIndex = column.tasks.findIndex((task) => task.id === overId)
-
-                  // Inserir a tarefa na posição correta
-                  const updatedTasks = [...column.tasks]
-                  updatedTasks.splice(overIndex, 0, updatedTask)
-
-                  return {
-                    ...column,
-                    tasks: updatedTasks,
-                  }
-                }
-
-                return column
-              })
-
-              return { columns: updatedColumns }
-            })
-
-            // Notificar sobre a mudança de coluna
-            setTimeout(() => {
-              if (!isMountedRef.current) return
-
-              addNotification(
-                "Status de tarefa atualizado",
-                `A tarefa "${activeTask.title}" para o cliente ${activeTask.client} foi movida para ${overColumn.title}.`,
-              )
-            }, 0)
-          }
+          setTimeout(() => {
+            if (!isMountedRef.current) return
+            addNotification(
+              "Status de tarefa atualizado",
+              `A tarefa "${activeTask.title}" para o cliente ${activeTask.client} foi movida para ${overColumn.title}.`
+            )
+          }, 0)
         }
       }
+    }
 
-      setActiveId(null)
-      setActiveTask(null)
-    },
-    [data.columns, findTaskById, addNotification],
-  )
+    setActiveId(null)
+    setActiveTask(null)
+  }, [data.columns, findTaskById, addNotification])
+
 
   return (
     <>
       <div className="mb-4 w-full">
-        <TaskFilters onFilterChange={handleFilterChange} />
+        <TaskFilters
+          onFilterChange={handleFilterChange}
+          availableProjects={projects}
+          availableClients={clients}
+          availableUsers={users}
+          availableEntities={entities}
+        />
+
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
@@ -901,14 +930,16 @@ export function KanbanBoard() {
                 <span className="text-xs font-medium px-2 py-1 bg-primary/10 text-primary rounded-full">
                   {activeTask.client}
                 </span>
-                <Badge variant={activeTask.isAdministrative ? "default" : "secondary"} className="text-xs">
-                  {activeTask.isAdministrative ? "Administrativo" : "Técnico"}
+                <Badge variant={activeTask.taskType === "administrative" ? "default" : "secondary"} className="text-xs">
+                  {activeTask.taskType === "administrative" ? "Administrativo" : "Técnico"}
                 </Badge>
+
               </div>
               <p className="text-xs text-muted-foreground mb-3">{activeTask.description}</p>
             </div>
           ) : null}
         </DragOverlay>
+
       </DndContext>
 
       {/* Diálogo de comentários */}
@@ -929,7 +960,13 @@ export function KanbanBoard() {
         <EditTaskDialog
           open={editDialogOpen}
           onOpenChange={setEditDialogOpen}
-          task={selectedTask}
+          task={{
+            ...selectedTask,
+            assignee:
+              typeof selectedTask.assignee === "string"
+                ? selectedTask.assignee
+                : selectedTask.assignee?.id || "", // ou full_name, dependendo do componente
+          }}
           onSave={handleSaveTask}
         />
       )}

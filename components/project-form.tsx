@@ -39,13 +39,28 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
   useEffect(() => {
     // Em um sistema real, isso seria uma chamada à API
     const loadData = async () => {
-      // Simulação de carregamento de dados
-      await new Promise((resolve) => setTimeout(resolve, 300))
-      // Deixamos vazio para ser preenchido pelo backend
-      setAvailableClients([])
-      setAvailableEntities([])
-    }
+      const token = localStorage.getItem("token")
+      const headers = {
+        Authorization: `Bearer ${token}`,
+      }
 
+      try {
+        const responseEntities = await fetch("/api/entidades", { headers })
+        const entidadesData = await responseEntities.json()
+        setAvailableEntities(entidadesData.entidades)
+    
+        const responseClients = await fetch("/api/clientes", { headers })
+        const clientesData = await responseClients.json()
+        setAvailableClients(clientesData.clientes)
+      } catch (error) {
+        console.error("Erro ao carregar dados:", error)
+        toast({
+          title: "Erro ao carregar dados",
+          description: "Verifique sua conexão ou permissões.",
+          variant: "destructive",
+        })
+      }
+    }    
     loadData()
   }, [])
 
@@ -57,14 +72,26 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
           // Simulação de carregamento de dados
           await new Promise((resolve) => setTimeout(resolve, 500))
 
-          const project = projectsData[projectId as keyof typeof projectsData]
-          if (project) {
-            setName(project.name)
-            setDescription(project.description)
-            setClient(project.client)
-            setEntity(project.entity)
-            setStatus(project.status)
+          const token = localStorage.getItem("token")
+          const headers = {
+            Authorization: `Bearer ${token}`,
           }
+          
+          const response = await fetch(`/api/projetos/${projectId}`, { headers })
+          const data = await response.json()
+          
+          if (!response.ok || !data.success) {
+            throw new Error(data.message || "Erro ao buscar projeto")
+          }
+          
+          const project = data.projeto
+          
+          setName(project.name)
+          setDescription(project.description)
+          setClient(project.client)
+          setEntity(project.entity)
+          setStatus(project.status)
+          
         } catch (error) {
           toast({
             title: "Erro ao carregar projeto",
@@ -95,29 +122,68 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
       const clientName = availableClients.find((c) => c.id === client)?.name || "Cliente"
       const entityName = availableEntities.find((e) => e.id === entity)?.name || "Entidade"
 
+      const token = localStorage.getItem("token")
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      }
       if (projectId) {
+        const response = await fetch(`/api/projetos/${projectId}`, {
+          method: "PUT",
+          headers,
+          body: JSON.stringify({
+            name,
+            description,
+            client,
+            entity,
+            status,
+          }),
+        })
+
+        const data = await response.json()
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || "Erro ao atualizar projeto.")
+        }
+
         toast({
           title: "Projeto atualizado com sucesso",
           description: "As informações do projeto foram atualizadas.",
         })
 
-        // Adicionar notificação
         addNotification(
           "Projeto atualizado",
-          `O projeto "${name}" para o cliente ${clientName} foi atualizado com sucesso.`,
+          `O projeto "${name}" foi atualizado com sucesso.`
         )
 
         router.push(`/dashboard/projects/${projectId}`)
       } else {
+        const response = await fetch("/api/projetos", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            name,
+            description,
+            client,
+            entity,
+            status,
+          }),
+        })
+
+        const data = await response.json()
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || "Erro ao criar projeto.")
+        }
+
         toast({
           title: "Projeto criado com sucesso",
           description: "O projeto foi adicionado ao sistema.",
         })
 
-        // Adicionar notificação
         addNotification(
           "Novo projeto criado",
-          `O projeto "${name}" para o cliente ${clientName} foi criado com sucesso pela ${entityName}.`,
+          `O projeto "${name}" foi criado com sucesso.`
         )
 
         router.push("/dashboard")

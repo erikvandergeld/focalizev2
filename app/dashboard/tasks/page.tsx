@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Plus } from "lucide-react"
 import { ProtectedRoute } from "@/components/protected-route"  // Importando ProtectedRoute
 import Link from "next/link"
-import { TaskList } from "@/components/task-list"
+import { TaskListView } from "@/components/task-list-view"
 
 
 export default function TasksPage() {
@@ -21,14 +21,13 @@ export default function TasksPage() {
         </Link>
       </DashboardHeader>
       <div className="flex items-center justify-between w-full">
-        <TaskFilters />
       </div>
       <Card className="w-full">
         <CardHeader>
           <CardTitle>Todas as tarefas</CardTitle>
         </CardHeader>
         <CardContent>
-          <TaskList />
+        <TaskListView />
         </CardContent>
       </Card>
     </div>

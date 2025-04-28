@@ -213,15 +213,16 @@ export function UserManagement() {
   }
 
   const handleSubmit = async () => {
-    // Validação
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.password || !formData.confirmPassword) {
-      toast({
-        title: "Erro de validação",
-        description: "Preencha todos os campos obrigatórios.",
-        variant: "destructive",
-      })
-      return
-    }
+    // Validação 
+    // Implementação dos campos de senha do PUT.
+    // if (!formData.firstName || !formData.lastName || !formData.email || !formData.password || !formData.confirmPassword) {
+    //   toast({
+    //     title: "Erro de validação",
+    //     description: "Preencha todos os campos obrigatórios.",
+    //     variant: "destructive",
+    //   })
+    //   return
+    // }
 
     if (formData.entities.length === 0) {
       toast({
@@ -241,23 +242,24 @@ export function UserManagement() {
       return
     }
 
-    if (!selectedUser && (!formData.password || formData.password.length < 6)) {
-      toast({
-        title: "Erro de validação",
-        description: "A senha deve ter pelo menos 6 caracteres.",
-        variant: "destructive",
-      })
-      return
-    }
 
-    if (!selectedUser && formData.password !== formData.confirmPassword) {
-      toast({
-        title: "Erro de validação",
-        description: "As senhas não coincidem.",
-        variant: "destructive",
-      })
-      return
-    }
+    // if (!selectedUser && (!formData.password || formData.password.length < 6)) {
+    //   toast({
+    //     title: "Erro de validação",
+    //     description: "A senha deve ter pelo menos 6 caracteres.",
+    //     variant: "destructive",
+    //   })
+    //   return
+    // }
+
+    // if (!selectedUser && formData.password !== formData.confirmPassword) {
+    //   toast({
+    //     title: "Erro de validação",
+    //     description: "As senhas não coincidem.",
+    //     variant: "destructive",
+    //   })
+    //   return
+    // }
 
     if (selectedUser) {
       try {
@@ -292,7 +294,6 @@ export function UserManagement() {
           description: `O usuário ${formData.firstName} ${formData.lastName} foi atualizado com sucesso.`,
         })
 
-        // Atualizar localmente a lista
         setUsers((prev) =>
           prev.map((user) =>
             user.id === selectedUser.id

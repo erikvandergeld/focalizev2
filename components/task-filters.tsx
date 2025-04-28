@@ -16,15 +16,21 @@ import { Badge } from "@/components/ui/badge"
 
 // Tipo para as props
 interface TaskFiltersProps {
-  onFilterChange?: (filters: any) => void
+  onFilterChange: (filters: any) => void
+  availableProjects: { id: string; name: string }[]
+  availableClients: { id: string; name: string }[]
+  availableUsers: { id: string; name: string }[]
+  availableEntities: { id: string; name: string }[]
 }
 
-export function TaskFilters({ onFilterChange }: TaskFiltersProps) {
-  // Substituir dados de exemplo por estados
-  const [availableClients, setAvailableClients] = useState<{ id: string; name: string }[]>([])
-  const [availableUsers, setAvailableUsers] = useState<{ id: string; name: string }[]>([])
-  const [availableEntities, setAvailableEntities] = useState<{ id: string; name: string }[]>([])
-  const [availableProjects, setAvailableProjects] = useState<{ id: string; name: string }[]>([])
+export function TaskFilters({
+  onFilterChange,
+  availableProjects = [],
+  availableClients = [],
+  availableUsers = [],
+  availableEntities = [],
+}: TaskFiltersProps)
+{
   const [taskTypes] = useState([
     { id: "administrative", name: "Administrativo" },
     { id: "technical", name: "Técnico" },
@@ -45,7 +51,6 @@ export function TaskFilters({ onFilterChange }: TaskFiltersProps) {
     projects: [],
   })
 
-  // Efeito para notificar mudanças nos filtros - com debounce para evitar atualizações excessivas
   useEffect(() => {
     const timer = setTimeout(() => {
       if (onFilterChange) {
@@ -55,8 +60,7 @@ export function TaskFilters({ onFilterChange }: TaskFiltersProps) {
         }
         onFilterChange(filters)
       }
-    }, 300) // Debounce de 300ms
-
+    }, 300)
     return () => clearTimeout(timer)
   }, [search, activeFilters, onFilterChange])
 
@@ -84,22 +88,6 @@ export function TaskFilters({ onFilterChange }: TaskFiltersProps) {
   }, [])
 
   const totalActiveFilters = Object.values(activeFilters).reduce((sum, filters) => sum + filters.length, 0)
-
-  // Adicionar useEffect para carregar dados
-  useEffect(() => {
-    // Em um sistema real, isso seria uma chamada à API
-    const loadData = async () => {
-      // Simulação de carregamento de dados
-      await new Promise((resolve) => setTimeout(resolve, 300))
-      // Deixamos vazio para ser preenchido pelo backend
-      setAvailableClients([])
-      setAvailableUsers([])
-      setAvailableEntities([])
-      setAvailableProjects([])
-    }
-
-    loadData()
-  }, [])
 
   return (
     <div className="flex flex-col w-full max-w-full">

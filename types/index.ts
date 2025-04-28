@@ -47,12 +47,17 @@ export interface Task {
   created_at: string
   updated_at?: string
   completed_at?: string
-  project?: Project
-  assignee?: User
-  creator?: User
+  project?: string | { id: string; name: string }
+  assignee?: string | { id: string; full_name: string } | null
+  creator?: any
   tags?: Tag[]
   subtasks?: Subtask[]
+
+  // 🔽 Adicione esses campos que estão sendo usados no código:
+  client?: string | { id: string; name: string }
+  entity?: string | { id: string; name: string }
 }
+
 
 export interface Subtask {
   id: number | string
