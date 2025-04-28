@@ -20,6 +20,8 @@ interface TaskCardProps {
   projectId?: number | string
 }
 
+
+
 export function TaskCard({ task, projectId }: TaskCardProps) {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -180,13 +182,28 @@ export function TaskCard({ task, projectId }: TaskCardProps) {
             </div>
           )}
 
-          {task.assignee && (
+          {typeof task.assignee === "object" && task.assignee?.full_name && (
             <div className="flex items-center">
               <Avatar className="h-6 w-6 mr-2">
                 <AvatarImage
                   src={`https://ui-avatars.com/api/?name=${encodeURIComponent(task.assignee.full_name)}&background=random`}
                 />
-                <AvatarFallback>{task.assignee.full_name.charAt(0)}</AvatarFallback>
+                <AvatarFallback>
+                  {task.assignee && typeof task.assignee === "object" && (
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback>
+                          {task.assignee.full_name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")
+                            .slice(0, 2)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">{task.assignee.full_name}</span>
+                    </div>
+                  )}
+                </AvatarFallback>
               </Avatar>
               <span className="text-sm">{task.assignee.full_name}</span>
             </div>
@@ -201,12 +218,37 @@ export function TaskCard({ task, projectId }: TaskCardProps) {
             <DialogTitle>Editar Tarefa</DialogTitle>
           </DialogHeader>
           <TaskForm
-            task={task}
+            task={{
+              ...task,
+              id: String(task.id),
+              assignee:
+                typeof task.assignee === "object" && task.assignee !== null
+                  ? task.assignee.id
+                  : task.assignee ?? "",
+              client:
+                typeof task.client === "object" && task.client !== null
+                  ? task.client.id
+                  : task.client ?? "",
+              entity:
+                typeof task.entity === "object" && task.entity !== null
+                  ? task.entity.id
+                  : task.entity ?? "",
+              project:
+                typeof task.project === "object" && task.project !== null
+                  ? task.project.id
+                  : task.project ?? "",
+              tags: task.tags?.map(tag => ({
+                id: String(tag.id),
+                name: tag.name,
+                color: tag.color
+              })) ?? []
+            }}
             projectId={projectId}
             onSubmit={handleEditTask}
             onCancel={() => setIsEditDialogOpen(false)}
             isSubmitting={isSubmitting}
           />
+
         </DialogContent>
       </Dialog>
 

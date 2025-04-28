@@ -3,7 +3,9 @@ import db from "@/lib/db"
 
 export async function PUT(req: NextRequest, context: { params: { id: string } }) {
   const userId = context.params.id
-
+    if (!userId) {
+        return NextResponse.json({ success: false, message: "ID do usuário não informado" }, { status: 400 })
+    }
   try {
     const body = await req.json()
 

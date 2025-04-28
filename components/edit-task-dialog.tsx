@@ -17,21 +17,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useNotifications } from "./notification-provider"
 import { useAuth } from "./auth-provider"
 
-// Dados de exemplo
-const clients = [
-  { id: "1", name: "Acme Inc" },
-  { id: "2", name: "TechCorp" },
-  { id: "3", name: "WebSolutions" },
-  { id: "4", name: "DataSys" },
-]
-
-const users = [
-  { id: "1", name: "João Silva" },
-  { id: "2", name: "Maria Souza" },
-  { id: "3", name: "Pedro Santos" },
-  { id: "4", name: "Ana Oliveira" },
-]
-
 interface EditTaskDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -49,69 +34,68 @@ interface EditTaskDialogProps {
 export function EditTaskDialog({ open, onOpenChange, task, onSave }: EditTaskDialogProps) {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [client, setClient] = useState("")
+  const [client, setClient] = useState("") // O ID do cliente será armazenado aqui
   const [assignee, setAssignee] = useState("")
   const [status, setStatus] = useState("")
   const { addNotification } = useNotifications()
   const { user } = useAuth()
 
-  // Add a function to check if the user can edit the task
-  const canEditTask = () => {
-    // In a real system, you would check user permissions
-    // For now, only the assignee can edit the task
-    return user?.name === task.assignee
-  }
+  const [clients, setClients] = useState<{ id: string; name: string }[]>([])
+  const [users, setUsers] = useState<{ id: string; name: string }[]>([])
 
+  // Carregar os dados de clientes e usuários
   useEffect(() => {
-    if (task) {
-      setTitle(task.title)
-      setDescription(task.description)
-      setClient(task.client)
-      setAssignee(task.assignee)
-      setStatus(task.status)
-    }
-  }, [task])
+    const fetchData = async () => {
+      try {
+        const token = localStorage.getItem("token")
+        const headers = { Authorization: `Bearer ${token}` }
 
-  const handleSubmit = () => {
-    // Check if the user has permission to edit the task
-    if (!canEditTask()) {
-      addNotification(
-        "Permissão negada",
-        "Você não tem permissão para editar esta tarefa. Apenas o responsável pode fazer isso.",
-      )
-      onOpenChange(false)
-      return
+        const [cliRes, userRes] = await Promise.all([fetch("/api/clientes", { headers }), fetch("/api/usuarios", { headers })])
+
+        const clientes = await cliRes.json()
+        const usuarios = await userRes.json()
+
+        setClients(clientes.clientes || [])
+        setUsers((usuarios.usuarios || []).map((u: any) => ({ id: u.id, name: `${u.firstName} ${u.lastName}`.trim() })))
+      } catch (error) {
+        console.error("Erro ao carregar dados de edição:", error)
+      }
     }
 
+    fetchData()
+  }, [])
+
+  // Inicializar os campos com os dados da tarefa, mas apenas se os campos ainda não estiverem preenchidos
+  // useEffect(() => {
+  //   if (task) {
+  //     setTitle(task.title)
+  //     setDescription(task.description)
+  //     setClient(task.client) // Aqui, o client é o ID
+  //     setAssignee(task.assignee)
+  //     setStatus(task.status)
+  //   }
+  // }, [task])
+
+  const filteredUsers = users.filter((u) => !!u.name?.trim())
+
+  const handleSubmit = async () => {
     const updatedTask = {
       ...task,
       title,
       description,
-      client,
+      client, // Aqui, o client vai ser o ID
       assignee,
       status,
     }
 
-    onSave(task.id, updatedTask)
-
-    addNotification(
-      "Tarefa atualizada",
-      `A tarefa "${title}" para o cliente ${clients.find((c) => c.name === client)?.name || client} foi atualizada.`,
-    )
-
-    onOpenChange(false)
-  }
-
-  // Add a useEffect to show a notification and close the dialog if the user doesn't have permission
-  useEffect(() => {
-    if (open && task && !canEditTask()) {
-      addNotification(
-        "Permissão negada",
-        "Você não tem permissão para editar esta tarefa. Apenas o responsável pode fazer isso.",
-      )
-      onOpenChange(false)
+    try {
+      await onSave(task.id, updatedTask) // Chama a função onSave que envia a requisição
+      addNotification("Tarefa atualizada", `A tarefa "${title}" foi atualizada.`)
+      onOpenChange(false) // Fecha o diálogo
+    } catch (error) {
+      addNotification("Erro ao atualizar tarefa", "Não foi possível atualizar a tarefa. Tente novamente.")
     }
-  }, [open, task, addNotification, onOpenChange])
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -141,7 +125,7 @@ export function EditTaskDialog({ open, onOpenChange, task, onSave }: EditTaskDia
                 </SelectTrigger>
                 <SelectContent>
                   {clients.map((c) => (
-                    <SelectItem key={c.id} value={c.name}>
+                    <SelectItem key={c.id} value={c.id}> {/* Usando o ID como valor */}
                       {c.name}
                     </SelectItem>
                   ))}
@@ -156,8 +140,8 @@ export function EditTaskDialog({ open, onOpenChange, task, onSave }: EditTaskDia
                   <SelectValue placeholder="Selecione um responsável" />
                 </SelectTrigger>
                 <SelectContent>
-                  {users.map((user) => (
-                    <SelectItem key={user.id} value={user.name}>
+                  {filteredUsers.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
                       {user.name}
                     </SelectItem>
                   ))}

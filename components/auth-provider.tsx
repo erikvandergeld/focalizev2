@@ -15,7 +15,6 @@ type User = {
 type AuthContextType = {
   user: User | null
   login: (email: string, password: string) => Promise<boolean>
-  register: (name: string, email: string, password: string) => Promise<boolean>
   logout: () => void
   isLoading: boolean
 }
@@ -41,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Função de login
   const login = async (email: string, password: string) => {
     setIsLoading(true)
-  
+
     try {
       const response = await fetch("/api/login", {
         method: "POST",
@@ -50,11 +49,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
         body: JSON.stringify({ email, password }),
       })
-  
+
       const data = await response.json()
 
       if (response.ok && data.success) {
-
         const loggedUser = {
           id: data.user.id,
           name: data.user.name,
@@ -63,14 +61,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           disabled: data.user.disabled,
           permissions: data.user.permissions || [],
         }
-  
+
         const token = data.token
-  
+
         setUser(loggedUser)
         localStorage.setItem("user", JSON.stringify(loggedUser))
         localStorage.setItem("token", token)
         setIsLoading(false)
         return true
+        function sleep(ms: number) {
+          return new Promise(function (resolve) {
+            setTimeout(function () {
+              resolve(true)
+            }, ms)
+          });
+        }
+        sleep(3000).then(() => {
+          window.location.reload();  // Recarrega a página para resetar o estado
+        });
+      
+       
+
       } else {
         setIsLoading(false)
         return false
@@ -81,41 +92,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return false
     }
   }
-  
 
-  // Função de registro
-  const register = async (name: string, email: string, password: string) => {
-    // Simulação de registro (pode ser substituído por uma chamada real à API)
-    setIsLoading(true)
-
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    const newUser = {
-      id: `user-${Date.now()}`,
-      name,
-      email,
-      isAdmin: false,
-      disabled: false,
-    }
-
-    setUser(newUser)
-    if (typeof window !== "undefined") {
-      localStorage.setItem("user", JSON.stringify(newUser))
-    }
-    setIsLoading(false)
-    return true
-  }
 
   // Função de logout
   const logout = () => {
-    setUser(null)
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("user")
-      localStorage.removeItem("token") // Remover o JWT no logout
-    }
-   }
+    setUser(null);  // Limpa o usuário do estado
 
-  return <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>{children}</AuthContext.Provider>
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("user");  // Remove o usuário do localStorage
+      localStorage.removeItem("token"); // Remove o token do localStorage
+    }
+  }
+
+
+  return <AuthContext.Provider value={{ user, login, logout, isLoading }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

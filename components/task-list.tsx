@@ -89,27 +89,83 @@ export function TaskList({ projectId }: { projectId?: string }) {
     setTaskList(updatedTasks)
   }
 
-  // Função para salvar as alterações de uma tarefa
-  const handleSaveTask = (taskId: string, updatedTask: any) => {
-    const updatedTasks = taskList.map((task) => (task.id === taskId ? { ...task, ...updatedTask } : task))
+  // const handleSaveTask = async (taskId: string, updatedTask: any) => {
+  //   console.log("Atualizando tarefa:", taskId, updatedTask);  // Log para depuração
 
-    setTaskList(updatedTasks)
-  }
+  //   const token = localStorage.getItem("token")
+  //   const headers = {
+  //     "Content-Type": "application/json",
+  //     Authorization: `Bearer ${token}`,
+  //   }
 
-  // Função para excluir uma tarefa
-  const handleDeleteTask = () => {
+  //   try {
+  //     const response = await fetch(`/api/tarefas/${taskId}`, {
+  //       method: "PUT",
+  //       headers,
+  //       body: JSON.stringify(updatedTask),
+  //     })
+
+  //     const data = await response.json()
+
+  //     console.log("Resposta do servidor:", data);  // Log da resposta
+
+  //     if (!response.ok || !data.success) {
+  //       throw new Error(data.message || "Erro ao atualizar tarefa.")
+  //     }
+
+  //     // Atualize a lista de tarefas localmente após o sucesso
+  //     setTaskList(prevList =>
+  //       prevList.map((task) =>
+  //         task.id === taskId ? { ...task, ...updatedTask } : task
+  //       )
+  //     )
+
+  //     // Se a atualização for bem-sucedida, retorna para o diálogo
+  //     addNotification("Tarefa atualizada", `A tarefa "${updatedTask.title}" foi atualizada.`)
+  //     return true
+  //   } catch (error) {
+  //     console.error("Erro ao atualizar tarefa:", error)
+  //     addNotification("Erro ao atualizar tarefa", "Não foi possível atualizar a tarefa. Tente novamente.")
+  //     throw error
+  //   }
+  // }
+
+  const handleDeleteTask = async () => {
     if (!selectedTask) return
 
-    const updatedTasks = taskList.filter((task) => task.id !== selectedTask.id)
-    setTaskList(updatedTasks)
+    try {
+      const token = localStorage.getItem("token")
 
-    addNotification(
-      "Tarefa excluída",
-      `A tarefa "${selectedTask.title}" para o cliente ${selectedTask.client} foi excluída.`,
-    )
+      const response = await fetch(`/api/tarefas/${selectedTask.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
 
-    setDeleteDialogOpen(false)
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Erro ao excluir tarefa.")
+      }
+
+      // Atualiza a lista local removendo a tarefa
+      const updatedTasks = taskList.filter((task) => task.id !== selectedTask.id)
+      setTaskList(updatedTasks)
+
+      addNotification(
+        "Tarefa excluída",
+        `A tarefa "${selectedTask.title}" para o cliente ${selectedTask.client} foi excluída.`
+      )
+
+      setDeleteDialogOpen(false)
+      setSelectedTask(null)
+    } catch (error) {
+      console.error("Erro ao excluir tarefa:", error)
+      addNotification("Erro ao excluir tarefa", "Não foi possível excluir a tarefa. Tente novamente.")
+    }
   }
+
 
   return (
     <>
@@ -148,14 +204,20 @@ export function TaskList({ projectId }: { projectId?: string }) {
                     <div className="flex items-center gap-2">
                       <Avatar className="h-6 w-6">
                         <AvatarFallback className="text-xs">
-                          {task.assignee
-                            .split(" ")
-                            .map((n) => n[0])
+                          {(typeof task.assignee === "string"
+                            ? task.assignee
+                            : task.assignee?.name
+                          )
+                            ?.split(" ")
+                            .map((n: string) => n[0])
                             .join("")}
                         </AvatarFallback>
                       </Avatar>
-                      {task.assignee}
+                      <span className="text-sm">
+                        {typeof task.assignee === "string" ? task.assignee : task.assignee?.name}
+                      </span>
                     </div>
+
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="text-xs">
@@ -233,14 +295,14 @@ export function TaskList({ projectId }: { projectId?: string }) {
       )}
 
       {/* Diálogo de edição */}
-      {selectedTask && (
+      {/* {selectedTask && (
         <EditTaskDialog
           open={editDialogOpen}
           onOpenChange={setEditDialogOpen}
           task={selectedTask}
           onSave={handleSaveTask}
         />
-      )}
+      )} */}
 
       {/* Diálogo de confirmação de exclusão */}
       <ConfirmDialog

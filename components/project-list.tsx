@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -11,16 +11,44 @@ import { ConfirmDialog } from "./confirm-dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { useNotifications } from "./notification-provider"
 
-// Dados de exemplo
-const projects: any[] = []
-
 export function ProjectList() {
   const router = useRouter()
   const { toast } = useToast()
   const { addNotification } = useNotifications()
-  const [projectList, setProjectList] = useState(projects)
+
+  const [projectList, setProjectList] = useState<any[]>([])
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedProject, setSelectedProject] = useState<any | null>(null)
+
+  // ✅ Buscar os projetos do backend
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const token = localStorage.getItem("token")
+        const response = await fetch("/api/projetos", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        const data = await response.json()
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || "Erro ao carregar projetos")
+        }
+
+        setProjectList(data.projetos)
+      } catch (error) {
+        toast({
+          title: "Erro",
+          description: "Não foi possível carregar os projetos.",
+          variant: "destructive",
+        })
+      }
+    }
+
+    fetchProjects()
+  }, [toast])
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -44,14 +72,8 @@ export function ProjectList() {
     }).format(date)
   }
 
-  const handleView = (id: string) => {
-    router.push(`/dashboard/projects/${id}`)
-  }
-
-  const handleEdit = (id: string) => {
-    router.push(`/dashboard/projects/${id}/edit`)
-  }
-
+  const handleView = (id: string) => router.push(`/dashboard/projects/${id}`)
+  const handleEdit = (id: string) => router.push(`/dashboard/projects/${id}/edit`)
   const handleOpenDeleteDialog = (project: any) => {
     setSelectedProject(project)
     setDeleteDialogOpen(true)
@@ -69,7 +91,7 @@ export function ProjectList() {
 
     addNotification(
       "Projeto excluído",
-      `O projeto "${selectedProject.name}" para o cliente ${selectedProject.client} foi excluído.`,
+      `O projeto "${selectedProject.name}" foi removido.`,
     )
 
     setDeleteDialogOpen(false)
@@ -86,8 +108,7 @@ export function ProjectList() {
               <TableHead>Entidade</TableHead>
               <TableHead>Cliente</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Tarefas</TableHead>
-              <TableHead>Data de criação</TableHead>
+              <TableHead>Data</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -97,39 +118,24 @@ export function ProjectList() {
                 <TableCell className="font-medium">{project.name}</TableCell>
                 <TableCell>{project.entity}</TableCell>
                 <TableCell>
-                  <span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
-                    {project.client}
-                  </span>
+                  <span className="text-sm">{project.client}</span>
                 </TableCell>
                 <TableCell>{getStatusBadge(project.status)}</TableCell>
-                <TableCell>
-                  <span className="text-sm">
-                    {project.completedTasks}/{project.tasksCount}
-                  </span>
-                </TableCell>
                 <TableCell>{formatDate(project.createdAt)}</TableCell>
                 <TableCell className="text-right">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        Ações
-                      </Button>
+                      <Button variant="ghost" size="sm">Ações</Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem className="flex items-center gap-2" onClick={() => handleView(project.id)}>
-                        <Eye className="h-4 w-4" />
-                        <span>Visualizar</span>
+                      <DropdownMenuItem onClick={() => handleView(project.id)}>
+                        <Eye className="h-4 w-4 mr-2" /> Visualizar
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="flex items-center gap-2" onClick={() => handleEdit(project.id)}>
-                        <Pencil className="h-4 w-4" />
-                        <span>Editar</span>
+                      <DropdownMenuItem onClick={() => handleEdit(project.id)}>
+                        <Pencil className="h-4 w-4 mr-2" /> Editar
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="flex items-center gap-2 text-destructive"
-                        onClick={() => handleOpenDeleteDialog(project)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        <span>Excluir</span>
+                      <DropdownMenuItem onClick={() => handleOpenDeleteDialog(project)} className="text-destructive">
+                        <Trash2 className="h-4 w-4 mr-2" /> Excluir
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -140,12 +146,11 @@ export function ProjectList() {
         </Table>
       </div>
 
-      {/* Diálogo de confirmação para excluir projeto */}
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         title="Excluir projeto"
-        description={`Tem certeza que deseja excluir o projeto "${selectedProject?.name}"? Esta ação não pode ser desfeita e todas as tarefas associadas serão desvinculadas.`}
+        description={`Tem certeza que deseja excluir o projeto "${selectedProject?.name}"?`}
         onConfirm={handleDeleteProject}
         confirmText="Sim, excluir"
         cancelText="Cancelar"

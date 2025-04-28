@@ -3,30 +3,30 @@ import db from "@/lib/db"
 import jwt from "jsonwebtoken"
 
 // Função auxiliar para validar token e permissão
-async function checkPermission(req: NextRequest): Promise<{ authorized: boolean; decoded?: any }> {
-  const authHeader = req.headers.get("authorization")
-  const token = authHeader?.split(" ")[1]
+// async function checkPermission(req: NextRequest): Promise<{ authorized: boolean; decoded?: any }> {
+//   const authHeader = req.headers.get("authorization")
+//   const token = authHeader?.split(" ")[1]
 
-  if (!token) return { authorized: false }
+//   if (!token) return { authorized: false }
 
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "*Ingline.Sys#9420%") as any
+//   try {
+//     const decoded = jwt.verify(token, process.env.JWT_SECRET || "*Ingline.Sys#9420%") as any
 
-    if (!decoded.permissions || !decoded.permissions.includes("acess_config")) {
-      return { authorized: false }
-    }
+//     if (!decoded.permissions || !decoded.permissions.includes("acess_config")) {
+//       return { authorized: false }
+//     }
 
-    return { authorized: true, decoded }
-  } catch {
-    return { authorized: false }
-  }
-}
+//     return { authorized: true, decoded }
+//   } catch {
+//     return { authorized: false }
+//   }
+// }
 
 export async function POST(req: NextRequest) {
-  const permissionCheck = await checkPermission(req)
-  if (!permissionCheck.authorized) {
-    return NextResponse.json({ success: false, message: "Acesso negado." }, { status: 403 })
-  }
+  // const permissionCheck = await checkPermission(req)
+  // if (!permissionCheck.authorized) {
+  //   return NextResponse.json({ success: false, message: "Acesso negado." }, { status: 403 })
+  // }
 
   try {
     const { id, name } = await req.json()
@@ -50,10 +50,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const permissionCheck = await checkPermission(req)
-  if (!permissionCheck.authorized) {
-    return NextResponse.json({ success: false, message: "Acesso negado." }, { status: 403 })
-  }
+  // const permissionCheck = await checkPermission(req)
+  // if (!permissionCheck.authorized) {
+  //   return NextResponse.json({ success: false, message: "Acesso negado." }, { status: 403 })
+  // }
 
   try {
     const [rows]: any = await db.query("SELECT * FROM entities ORDER BY name ASC")
