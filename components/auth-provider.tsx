@@ -68,19 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem("user", JSON.stringify(loggedUser))
         localStorage.setItem("token", token)
         setIsLoading(false)
-        return true
-        function sleep(ms: number) {
-          return new Promise(function (resolve) {
-            setTimeout(function () {
-              resolve(true)
-            }, ms)
-          });
-        }
-        sleep(3000).then(() => {
-          window.location.reload();  // Recarrega a página para resetar o estado
-        });
-      
-       
+        return true     
 
       } else {
         setIsLoading(false)
@@ -101,10 +89,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== "undefined") {
       localStorage.removeItem("user");  // Remove o usuário do localStorage
       localStorage.removeItem("token"); // Remove o token do localStorage
+      localStorage.removeItem("notifications"); // Remove as notificações do localStorage
     }
   }
-
-
   return <AuthContext.Provider value={{ user, login, logout, isLoading }}>{children}</AuthContext.Provider>
 }
 

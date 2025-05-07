@@ -1,51 +1,78 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Eye, Search, X } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { CommentDialog } from "./comment-dialog"
-import { formatDistanceToNow } from "date-fns"
-import { ptBR } from "date-fns/locale"
+import { useState, useEffect } from "react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Eye, Search, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { CommentDialog } from "./comment-dialog";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { Task } from "./kanban-board";
 
 // Dados de exemplo
-const archivedTasks: any[] = []
+const archivedTasks: any[] = [];
 
 export function ArchivedTaskList() {
-  const [search, setSearch] = useState("")
-  const [commentDialogOpen, setCommentDialogOpen] = useState(false)
-  const [selectedTask, setSelectedTask] = useState<any | null>(null)
+  const [archivedTasks, setArchivedTasks] = useState<Task[]>([]);
+  const [search, setSearch] = useState(""); // Estado para a pesquisa
+  const [commentDialogOpen, setCommentDialogOpen] = useState(false); // Estado para o dialog de comentários
+  const [selectedTask, setSelectedTask] = useState<any | null>(null); // Estado para a tarefa selecionada
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
+  useEffect(() => {
+    // Carregar todas as tarefas arquivadas do backend ou do estado global
+    const fetchArchivedTasks = async () => {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch("/api/tarefas/arquivada", { // URL correta do endpoint
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        if (data.success) {
+          setArchivedTasks(data.tasks || []);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar tarefas arquivadas", error);
+      }
+    };
+
+    fetchArchivedTasks();
+  }, []);
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "-"; // Se for null, retorna um valor padrão
+    const date = new Date(dateString);
     return new Intl.DateTimeFormat("pt-BR", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
-    }).format(date)
-  }
+    }).format(date);
+  };
 
-  const formatArchiveTime = (dateString: string) => {
-    return formatDistanceToNow(new Date(dateString), { addSuffix: true, locale: ptBR })
-  }
+  const formatArchiveTime = (dateString: string | null) => {
+    if (!dateString) return "-"; // Se for null, retorna um valor padrão
+    return formatDistanceToNow(new Date(dateString), { addSuffix: true, locale: ptBR });
+  };
 
   const handleOpenCommentDialog = (task: any) => {
-    setSelectedTask(task)
-    setCommentDialogOpen(true)
-  }
+    setSelectedTask(task);
+    setCommentDialogOpen(true);
+  };
 
   // Filtrar tarefas com base na pesquisa
   const filteredTasks = archivedTasks.filter(
     (task) =>
       task.title.toLowerCase().includes(search.toLowerCase()) ||
       task.client.toLowerCase().includes(search.toLowerCase()) ||
-      task.assignee.toLowerCase().includes(search.toLowerCase()) ||
+      (task.assignee &&
+        typeof task.assignee !== "string" &&
+        task.assignee?.full_name.toLowerCase().includes(search.toLowerCase())) || // Verificação de `assignee`
       task.entity.toLowerCase().includes(search.toLowerCase()) ||
-      (task.project && task.project.toLowerCase().includes(search.toLowerCase())),
-  )
+      (task.project && task.project.toLowerCase().includes(search.toLowerCase()))
+  );
 
   return (
     <>
@@ -92,43 +119,39 @@ export function ArchivedTaskList() {
             {filteredTasks.map((task) => (
               <TableRow key={task.id}>
                 <TableCell className="font-medium">{task.title}</TableCell>
+                <TableCell>{task.client}</TableCell>
                 <TableCell>
-                  <span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
-                    {task.client}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <Avatar className="h-6 w-6">
-                      <AvatarFallback className="text-xs">
-                        {task.assignee
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </AvatarFallback>
-                    </Avatar>
-                    {task.assignee}
-                  </div>
-                </TableCell>
-                <TableCell>{task.entity}</TableCell>
-                <TableCell>
-                  {task.project ? (
-                    <Badge variant="outline">{task.project}</Badge>
+                  {/* Verificação se assignee é null ou objeto */}
+                  {task.assignee ? (
+                    typeof task.assignee === "string" ? (
+                      task.assignee
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-6 w-6">
+                          <AvatarFallback className="text-xs">
+                            {task.assignee.full_name.split(" ").map((n: string) => n[0]).join("")}
+                          </AvatarFallback>
+                        </Avatar>
+                        {task.assignee.full_name}
+                      </div>
+                    )
                   ) : (
-                    <span className="text-muted-foreground text-sm">-</span>
+                    "Sem responsável"
                   )}
                 </TableCell>
+                <TableCell>{task.entity_name}</TableCell>
+                <TableCell>{task.project || "-"}</TableCell>
                 <TableCell>
-                  <Badge variant={task.isAdministrative ? "default" : "secondary"}>
-                    {task.isAdministrative ? "Administrativo" : "Técnico"}
+                  <Badge variant={task.taskType === "administrative" ? "default" : "secondary"}>
+                    {task.taskType === "administrative" ? "Administrativo" : "Técnico"}
                   </Badge>
                 </TableCell>
                 <TableCell>{formatDate(task.completedAt)}</TableCell>
                 <TableCell>{formatArchiveTime(task.archivedAt)}</TableCell>
                 <TableCell className="text-right">
-                  <Button variant="ghost" size="sm" onClick={() => handleOpenCommentDialog(task)} className="gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => handleOpenCommentDialog(task)}>
                     <Eye className="h-4 w-4" />
-                    <span>Detalhes</span>
+                    Detalhes
                   </Button>
                 </TableCell>
               </TableRow>
@@ -157,5 +180,5 @@ export function ArchivedTaskList() {
         />
       )}
     </>
-  )
+  );
 }

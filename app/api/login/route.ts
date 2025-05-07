@@ -20,7 +20,6 @@ export async function POST(req: NextRequest) {
     const [rows]: any = await db.execute("SELECT * FROM users WHERE email = ?", [email])
     console.log("Resultado rows:", rows)
 
-
     if (rows.length !== 1) {
       return NextResponse.json({ success: false, message: "Credenciais inválidas" }, { status: 401 })
     }
@@ -32,17 +31,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Credenciais inválidas" }, { status: 401 })
     }
 
+    // Aqui você inclui as entidades do usuário no JWT
     const token = jwt.sign(
       {
         id: user.id,
         name: `${user.firstName} ${user.lastName}`,
         email: user.email,
-        permissions: user.permissions || [], // ✅ aqui também
+        permissions: user.permissions || [],
+        entities: user.entities || [],  // Inclui as entidades do usuário no token
       },
       process.env.JWT_SECRET!,
       { expiresIn: "1h" }
     )
-
 
     return NextResponse.json({
       success: true,
@@ -53,10 +53,10 @@ export async function POST(req: NextRequest) {
         email: user.email,
         isAdmin: user.tipo === "comum",
         disabled: false,
-        permissions: user.permissions || [], // ✅ aqui
+        permissions: user.permissions || [],
+        entities: user.entities || [], // Aqui também incluímos as entidades no objeto de retorno
       },
     })
-
 
   } catch (error) {
     console.error("Erro ao acessar o banco:", error)

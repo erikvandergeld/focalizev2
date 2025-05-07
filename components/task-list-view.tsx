@@ -41,6 +41,7 @@ type Task = {
     id: string
     full_name: string
   } | null
+  entity_name: string
   entity: string
   project: string | null
   taskType: "technical" | "administrative"
@@ -206,8 +207,6 @@ export function TaskListView() {
 
       const data = await response.json()
 
-      console.log("Resposta do servidor:", data);  // Log da resposta
-
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Erro ao atualizar tarefa.")
       }
@@ -215,11 +214,11 @@ export function TaskListView() {
       await fetchData(); // Refaz a requisição GET para obter os dados atualizados do servidor
 
       // Se a atualização for bem-sucedida, retorna para o diálogo
-      addNotification("Tarefa atualizada", `A tarefa "${updatedTask.title}" foi atualizada.`)
+      addNotification("Tarefa atualizada", `O usuário ${user?.name} atualizou a tarefa "${updatedTask.title}".`)
       return true
     } catch (error) {
       console.error("Erro ao atualizar tarefa:", error)
-      addNotification("Erro ao atualizar tarefa", "Não foi possível atualizar a tarefa. Tente novamente.")
+      addNotification("Erro ao atualizar tarefa", `Não foi possível atualizar a tarefa. Usuário ${user?.name} não tem permissão. Tente novamente.`)
       throw error
     }
   }
@@ -242,10 +241,11 @@ export function TaskListView() {
       }
 
       setTasks((prev) => prev.filter((task) => task.id !== selectedTask.id))
-      addNotification("Tarefa excluída", `A tarefa "${selectedTask.title}" foi excluída com sucesso.`)
+      addNotification("Tarefa excluída", `A tarefa "${selectedTask.title}" foi excluída do sistema com sucesso pelo usuário ${user?.name}`)
       setDeleteDialogOpen(false)
       setSelectedTask(null)
     } catch (error) {
+      addNotification("Erro ao excluir tarefa", `Tentativa de exclusão de tarefa pelo usuário ${user?.name}. Não foi possível excluir a tarefa ${selectedTask?.title}.`)
       console.error("Erro ao excluir tarefa:", error)
     }
   }
@@ -258,6 +258,8 @@ export function TaskListView() {
         return <Badge variant="secondary">Em andamento</Badge>
       case "completed":
         return <Badge variant="default">Finalizada</Badge>
+      case "archived":
+        return <Badge variant="destructive">Arquivada</Badge>
       default:
         return <Badge variant="outline">Desconhecido</Badge>
     }
@@ -312,7 +314,6 @@ export function TaskListView() {
       addNotification("Erro ao adicionar comentário", "Não foi possível adicionar o comentário.");
     }
   };
-
 
   return (
     <>
@@ -372,7 +373,7 @@ export function TaskListView() {
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="text-xs">
-                      {task.entity}
+                      {task.entity_name}
                     </Badge>
                   </TableCell>
                   <TableCell>{getStatusBadge(task.status)}</TableCell>

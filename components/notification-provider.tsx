@@ -4,6 +4,8 @@ import { createContext, useContext, useState, useEffect, useCallback } from "rea
 import { useToast } from "@/components/ui/use-toast"
 import { Bell } from "lucide-react"
 import { json } from "stream/consumers"
+import { useAuth } from "@/components/auth-provider"
+
 
 type Notification = {
   id: string
@@ -30,54 +32,38 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const unreadCount = notifications.filter((notification) => !notification.read).length
 
+  const { user } = useAuth()
+
   useEffect(() => {
+    if (!user?.id) return
+  
     const fetchNotifications = async () => {
-      const user = localStorage.getItem("user");
-
-      if (!user) {
-        console.error("Usuário não autenticado");
-        return;
-      }
-
-      const parsedUser = JSON.parse(user);
-      const userId = parsedUser.id;
-
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        console.error("Token não encontrado");
-        return;
-      }
-
       try {
-        // Requisição ao backend para pegar as notificações com base no usuário
+        const token = localStorage.getItem("token")
         const response = await fetch("/api/notificacoes", {
-          method: "GET",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`, // Passando o token de autenticação
-            "x-user-id": userId, // Passando o userId como cabeçalho
+            "Authorization": `Bearer ${token}`,
+            "x-user-id": user.id,
           },
-        });
-
-        const data = await response.json();
-
-        console.log("Notificações recebidas: (Verificando se vão receber a notificação)", data.notifications); // Log para verificar as notificações recebidas
-
+        })
+  
+        const data = await response.json()
+  
         if (data.success) {
-          // Aqui, no momento de resposta, você armazena as notificações no localStorage
-          localStorage.setItem("notifications", JSON.stringify(data.notifications));  // Salva as notificações no localStorage
-          setNotifications(data.notifications);  // Atualiza o estado com as novas notificações
+          setNotifications(data.notifications)
+          localStorage.setItem("notifications", JSON.stringify(data.notifications))
         } else {
-          console.error("Erro ao buscar notificações:", data.message);
+          console.error("Erro ao buscar notificações:", data.message)
         }
       } catch (error) {
-        console.error("Erro ao buscar notificações:", error);
+        console.error("Erro ao buscar notificações:", error)
       }
-    };
-
-    fetchNotifications();
-  }, []);
+    }
+  
+    fetchNotifications()
+  }, [user?.id]) // ✅ escuta mudanças de usuário
+  
 
 
   const addNotification = useCallback(
@@ -186,34 +172,34 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const clearNotifications = async () => {
     try {
       const user = localStorage.getItem("user");
-
+  
       if (!user) {
         console.error("Usuário não autenticado");
         return;
       }
-
+  
       const parsedUser = JSON.parse(user);
       const userId = parsedUser.id;
-
+  
       if (!userId) {
         console.error("ID do usuário não encontrado");
         return;
       }
-
-      const response = await fetch("/api/notificacoes", {
+  
+      const response = await fetch("/api/notificacoes/limpar-todas", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({ userId }),  // Enviamos o ID do usuário para a API
       });
-
+  
       const data = await response.json();
-
+  
       if (data.success) {
         // Atualizar estado local das notificações para marcá-las como lidas
         setNotifications((prev) =>
-          prev.map((notification) => ({ ...notification, read: true })) // Marca todas como lidas localmente
+          prev.map((notification) => ({ ...notification, read: true, visualizada: true })) // Marca todas como lidas localmente
         );
       } else {
         console.error("Erro ao limpar notificações:", data.message);
@@ -222,7 +208,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       console.error("Erro ao limpar notificações:", error);
     }
   };
-
+  
 
   return (
     <NotificationContext.Provider

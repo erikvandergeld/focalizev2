@@ -33,6 +33,13 @@ export function ProjectList() {
 
         const data = await response.json()
 
+        if(!token){
+          toast({
+            title: "Erro",
+            description: "Você não está autenticado.",
+            variant: "destructive",
+        })}
+        
         if (!response.ok || !data.success) {
           throw new Error(data.message || "Erro ao carregar projetos")
         }
@@ -116,7 +123,7 @@ export function ProjectList() {
             {projectList.map((project) => (
               <TableRow key={project.id}>
                 <TableCell className="font-medium">{project.name}</TableCell>
-                <TableCell>{project.entity}</TableCell>
+                <TableCell>{project.entity_name}</TableCell>
                 <TableCell>
                   <span className="text-sm">{project.client}</span>
                 </TableCell>

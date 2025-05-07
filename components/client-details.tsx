@@ -18,7 +18,12 @@ export function ClientDetails({ id }: ClientDetailsProps) {
   useEffect(() => {
     const fetchClient = async () => {
       try {
-        const response = await fetch(`/api/clientes/${id}`)
+        const response = await fetch(`/api/clientes/${id}`, {
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${localStorage.getItem("token") || ""}`,
+          }
+        })
         const data = await response.json()
 
         if (response.ok && data.success) {

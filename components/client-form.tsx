@@ -38,7 +38,12 @@ export function ClientForm({ clientId }: ClientFormProps) {
   useEffect(() => {
     const loadEntities = async () => {
       try {
-        const response = await fetch("/api/entidades")
+        const response = await fetch("/api/entidades", {
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${localStorage.getItem("token") || ""}`, // ✅ aqui
+          },
+        })
         const data = await response.json()
 
         if (response.ok && data.success && Array.isArray(data.entidades)) {
@@ -69,7 +74,13 @@ export function ClientForm({ clientId }: ClientFormProps) {
     if (clientId) {
       const loadClient = async () => {
         try {
-          const response = await fetch(`/api/clientes/${clientId}`)
+          const response = await fetch(`/api/clientes/${clientId}`, {
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${localStorage.getItem("token") || ""}`,
+            },
+          })
+
           const data = await response.json()
 
           if (!response.ok || !data.success || !data.client) {

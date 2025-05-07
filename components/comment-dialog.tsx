@@ -16,6 +16,10 @@ import { formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useNotifications } from "./notification-provider"
+import { toast } from "sonner"
+import { User } from "lucide-react"
+import { useAuth } from "./auth-provider"
+
 
 export type Comment = {
   id: string
@@ -74,6 +78,7 @@ export function CommentDialog({
 }: CommentDialogProps) {
   const [newComment, setNewComment] = useState("");
   const { addNotification } = useNotifications()
+  const { user: $user } = useAuth()
 
   const handleSubmit = async () => {
     if (newComment.trim()) {
@@ -87,14 +92,16 @@ export function CommentDialog({
         // Notificar o usuário
         addNotification(
           "Comentário adicionado",
-          `Você adicionou um comentário à tarefa "${taskTitle}" para o cliente ${client}.`
+          `O usuário ${$user?.name} adicionou um comentário à tarefa "${taskTitle}" para o cliente ${client}.`
         );
+
+        toast.success("Comentário adicionado com sucesso!");
 
         // Atualizar a lista de comentários localmente
         onOpenChange(true);  // Atualiza o estado e força a re-renderização do Dialog
       } catch (error) {
         console.error("Erro ao adicionar comentário:", error);
-        addNotification("Erro ao adicionar comentário", "Não foi possível adicionar o comentário.");
+        addNotification(`Erro ao adicionar comentário (${User.name})`, "Não foi possível adicionar o comentário.");
       }
     }
   };

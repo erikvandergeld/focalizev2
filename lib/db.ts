@@ -6,8 +6,16 @@ const pool = mysql.createPool({
   password: "FCkbGGv-DHh",
   database: "focalize_db",
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: 100,
   queueLimit: 0,
 })
+
+
+// Função para obter uma conexão
+export const getDbConnection = async () => {
+  const connection = await pool.getConnection();
+  return connection;
+};
+
 
 export default pool
