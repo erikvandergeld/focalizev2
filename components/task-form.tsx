@@ -11,6 +11,8 @@ import { useToast } from "@/components/ui/use-toast"
 import { useNotifications } from "./notification-provider"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { PlusCircle, Tag } from "lucide-react"
+import { useAuth } from "./auth-provider"
+
 
 export function TaskForm() {
   const [title, setTitle] = useState("")
@@ -25,7 +27,7 @@ export function TaskForm() {
   const [newProjectName, setNewProjectName] = useState("")
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-
+  const { user } = useAuth()
   const [availableClients, setAvailableClients] = useState<{ id: string; name: string; entities: string[] }[]>([])
   const [availableUsers, setAvailableUsers] = useState<{ id: string; name: string; entities: string[] }[]>([])
   const [availableEntities, setAvailableEntities] = useState<{ id: string; name: string }[]>([])
@@ -50,7 +52,6 @@ export function TaskForm() {
           fetch("/api/tags", { headers }),
         ])
 
-        console.log(projRes);
 
         const [entidades, clientes, usuarios, projetos, tags] = await Promise.all([
           entRes.json(),
@@ -137,7 +138,7 @@ export function TaskForm() {
       if (!res.ok || !data.success) throw new Error(data.message)
 
       toast({ title: "Tarefa criada com sucesso" })
-      addNotification("Nova tarefa", `A tarefa "${title}" foi criada.`)
+      addNotification("Nova tarefa!", `A tarefa "${title}" foi criada com sucesso pelo usuário ${user?.name}.`)
       router.push("/dashboard")
     } catch (error) {
       toast({ title: "Erro ao salvar", description: "Não foi possível salvar a tarefa.", variant: "destructive" })
@@ -198,6 +199,7 @@ export function TaskForm() {
           </div>
         </div>
 
+      
         <div className="grid gap-2">
           <div className="flex justify-between items-center">
             <Label>Projeto</Label>
@@ -250,6 +252,7 @@ export function TaskForm() {
             </SelectContent>
           </Select>
         </div>
+
 
         <div className="grid gap-2">
           <Label>Tags</Label>

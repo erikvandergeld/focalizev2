@@ -5,34 +5,69 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TaskList } from "@/components/task-list"
+import { toast } from "@/components/ui/use-toast"  // Importando a função toast
 
 interface ProjectDetailsProps {
   id: string
 }
 
-// Dados de exemplo
-const projectData: Record<string, any> = {}
-
 export function ProjectDetails({ id }: ProjectDetailsProps) {
   const [project, setProject] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    // Simulação de carregamento de dados
-    const loadProject = async () => {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      setProject(projectData[id as keyof typeof projectData] || null)
-      setIsLoading(false)
-    }
+  // useEffect(() => {
+  //   const loadProject = async () => {
+  //     try {
+  //       const token = localStorage.getItem("token") // Garantir que o token esteja armazenado corretamente
+  //       if (!token) {
+  //         throw new Error("Token não encontrado")
+  //       }
 
-    loadProject()
-  }, [id])
+  //       const headers = {
+  //         Authorization: `Bearer ${token}`,
+  //       }
 
+  //       // Realizar a requisição para buscar os dados do projeto
+  //       const response = await fetch(`/api/projetos/${id}`, { headers })
+
+  //       // Verifica se a resposta da requisição é válida
+  //       if (!response.ok) {
+  //         const errorData = await response.json()
+  //         console.log("Erro na requisição:", errorData)  // Log para depuração
+  //         throw new Error(errorData.message || "Erro ao buscar projeto")
+  //       }
+
+  //       const data = await response.json()
+
+  //       // Verifica se a resposta da API contém sucesso
+  //       if (!data.success) {
+  //         console.log("Erro no retorno da API:", data)  // Log para depuração
+  //         throw new Error(data.message || "Erro ao buscar projeto")
+  //       }
+
+  //       setProject(data.project) // Atualiza o estado com os dados do projeto
+  //       console.log("Projeto carregado com sucesso:", data.project)  // Log para confirmar o carregamento
+  //     } catch (error) {
+  //       console.error("Erro ao carregar projeto:", error) // Log do erro
+
+  //     } finally {
+  //       console.log("Carregamento finalizado")  // Log para confirmar que o carregamento terminou
+  //       setIsLoading(false) // Finaliza o carregamento
+  //     }
+  //   }
+
+  //   loadProject()
+  // }, [id])
+
+  // Exibe a tela de carregamento enquanto isLoading é true
   if (isLoading) {
+    console.log("Tela de carregamento está ativa...")
     return <div className="flex justify-center p-4">Carregando...</div>
   }
 
+  // Caso o projeto não seja encontrado
   if (!project) {
+    console.log("Projeto não encontrado ou dados não carregados corretamente")
     return <div className="flex justify-center p-4">Projeto não encontrado</div>
   }
 
@@ -155,25 +190,12 @@ export function ProjectDetails({ id }: ProjectDetailsProps) {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
+                {/* Simulação de histórico de atividades */}
                 <div className="flex items-start gap-4">
                   <div className="min-w-24 text-sm text-muted-foreground">{formatDate("2023-05-10T10:00:00Z")}</div>
                   <div>
                     <p className="text-sm font-medium">Tarefa concluída</p>
                     <p className="text-sm text-muted-foreground">Análise de requisitos para o novo sistema</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <div className="min-w-24 text-sm text-muted-foreground">{formatDate("2023-05-05T14:30:00Z")}</div>
-                  <div>
-                    <p className="text-sm font-medium">Reunião realizada</p>
-                    <p className="text-sm text-muted-foreground">Apresentação do projeto e definição de escopo</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <div className="min-w-24 text-sm text-muted-foreground">{formatDate("2023-04-25T11:20:00Z")}</div>
-                  <div>
-                    <p className="text-sm font-medium">Projeto iniciado</p>
-                    <p className="text-sm text-muted-foreground">Início do desenvolvimento</p>
                   </div>
                 </div>
               </div>

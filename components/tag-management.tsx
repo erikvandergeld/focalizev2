@@ -217,6 +217,10 @@ export function TagManagement() {
     try {
       const response = await fetch(`/api/tags/${selectedTag.id}`, {
         method: "DELETE",
+        headers:{
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token") || ""}`, // ✅ aqui
+        }
       })
 
       const data = await response.json()

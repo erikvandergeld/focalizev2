@@ -42,7 +42,7 @@ type User = {
 }
 
 const permissions: Permission[] = [
-  { id: "delete_project", name: "Excluir Projetos", description: "Permite excluir projetos"},
+  { id: "delete_project", name: "Excluir Projetos", description: "Permite excluir projetos" },
   { id: "acess_config", name: "Acessar Configurações", description: "Permite acessar as configurações do sistema" },
   { id: "create_task", name: "Criar Tarefas", description: "Permite criar novas tarefas" },
   { id: "edit_task", name: "Editar Tarefas", description: "Permite editar tarefas existentes" },
@@ -66,7 +66,8 @@ export function UserManagement() {
 
   useEffect(() => {
     if (!isLoading && (!user || !user.permissions?.includes("acess_config"))) {
-      router.push("/dashboard") // ou "/login", ou mostre uma tela de erro
+      // Caso o usuário não tenha a permissão "acess_config", redireciona para a página inicial ou de erro.
+      router.push("/dashboard") // Redireciona para uma página sem acesso a configurações
     }
   }, [user, isLoading, router])
 
@@ -95,9 +96,21 @@ export function UserManagement() {
   useEffect(() => {
     const carregarEntidades = async () => {
       try {
-        const response = await fetch("/api/entidades")
+        const token = localStorage.getItem("token")  // Pega o token armazenado no localStorage
+        if (!token) {
+          console.error("Token não encontrado")
+          return
+        }
+  
+        const response = await fetch("/api/entidades", {
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,  // Adiciona o token no cabeçalho
+          },
+        })
+        
         const data = await response.json()
-
+  
         if (response.ok && data.success) {
           setEntities(data.entidades)
         } else {
@@ -116,30 +129,52 @@ export function UserManagement() {
         })
       }
     }
-
+  
     carregarEntidades()
-  }, [toast])
+  }, [toast])  // Aqui, estamos apenas refazendo a requisição quando o toast mudar
+  
 
-  // Carregue o valor do localStorage apenas no lado do cliente
+
   useEffect(() => {
     const carregarUsuarios = async () => {
-      const response = await fetch("/api/usuarios")
-      const data = await response.json()
-
-      if (response.ok && data.success) {
-        setUsers(data.usuarios)
-      } else {
+      try {
+        const token = localStorage.getItem("token")  // Pega o token armazenado no localStorage
+        if (!token) {
+          console.error("Token não encontrado")
+          return
+        }
+  
+        const response = await fetch("/api/usuarios", {
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,  // Adiciona o token no cabeçalho
+          },
+        })
+  
+        const data = await response.json()
+  
+        if (response.ok && data.success) {
+          setUsers(data.usuarios)
+        } else {
+          toast({
+            title: "Erro",
+            description: "Erro ao buscar usuários.",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("Erro ao carregar usuários:", error)
         toast({
           title: "Erro",
-          description: "Erro ao buscar usuários.",
+          description: "Erro ao se conectar com o servidor.",
           variant: "destructive",
         })
       }
     }
-
+  
     carregarUsuarios()
-  }, [])
-
+  }, [toast])  // Aqui também estamos apenas refazendo a requisição quando o toast mudar
+  
   const resetForm = () => {
     setFormData({
       firstName: "",
@@ -212,92 +247,64 @@ export function UserManagement() {
     }))
   }
 
-  const handleSubmit = async () => {
-    // Validação 
-    // Implementação dos campos de senha do PUT.
-    // if (!formData.firstName || !formData.lastName || !formData.email || !formData.password || !formData.confirmPassword) {
-    //   toast({
-    //     title: "Erro de validação",
-    //     description: "Preencha todos os campos obrigatórios.",
-    //     variant: "destructive",
-    //   })
-    //   return
-    // }
+const handleSubmit = async () => {
+  // Validação
+  if (formData.entities.length === 0) {
+    toast({
+      title: "Erro de validação",
+      description: "Selecione pelo menos uma entidade.",
+      variant: "destructive",
+    })
+    return
+  }
 
-    if (formData.entities.length === 0) {
-      toast({
-        title: "Erro de validação",
-        description: "Selecione pelo menos uma entidade.",
-        variant: "destructive",
+  if (formData.permissions.length === 0) {
+    toast({
+      title: "Erro de validação",
+      description: "Selecione pelo menos uma permissão.",
+      variant: "destructive",
+    })
+    return
+  }
+
+  // Enviar para a API de criação ou atualização
+  if (selectedUser) {
+    try {
+      const response = await fetch(`/api/usuarios/${selectedUser.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token") || ""}`, // Inclusão do token
+        },
+        body: JSON.stringify({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          entities: formData.entities,
+          permissions: formData.permissions,
+        }),
       })
-      return
-    }
 
-    if (formData.permissions.length === 0) {
-      toast({
-        title: "Erro de validação",
-        description: "Selecione pelo menos uma permissão.",
-        variant: "destructive",
-      })
-      return
-    }
+      const data = await response.json()
 
-
-    // if (!selectedUser && (!formData.password || formData.password.length < 6)) {
-    //   toast({
-    //     title: "Erro de validação",
-    //     description: "A senha deve ter pelo menos 6 caracteres.",
-    //     variant: "destructive",
-    //   })
-    //   return
-    // }
-
-    // if (!selectedUser && formData.password !== formData.confirmPassword) {
-    //   toast({
-    //     title: "Erro de validação",
-    //     description: "As senhas não coincidem.",
-    //     variant: "destructive",
-    //   })
-    //   return
-    // }
-
-    if (selectedUser) {
-      try {
-        const response = await fetch(`/api/usuarios/${selectedUser.id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${localStorage.getItem("token") || ""}`, // ✅ aqui
-          },
-          body: JSON.stringify({
-            firstName: formData.firstName,
-            lastName: formData.lastName,
-            email: formData.email,
-            entities: formData.entities,
-            permissions: formData.permissions,
-          }),
-        })
-
-        const data = await response.json()
-
-        if (!response.ok || !data.success) {
-          toast({
-            title: "Erro",
-            description: data.message || "Erro ao atualizar o usuário.",
-            variant: "destructive",
-          })
-          return
-        }
-
+      if (!response.ok || !data.success) {
         toast({
-          title: "Usuário atualizado",
-          description: `O usuário ${formData.firstName} ${formData.lastName} foi atualizado com sucesso.`,
+          title: "Erro",
+          description: data.message || "Erro ao atualizar o usuário.",
+          variant: "destructive",
         })
+        return
+      }
 
-        setUsers((prev) =>
-          prev.map((user) =>
-            user.id === selectedUser.id
-              ? {
+      toast({
+        title: "Usuário atualizado",
+        description: `O usuário ${formData.firstName} ${formData.lastName} foi atualizado com sucesso.`,
+      })
+
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.id === selectedUser.id
+            ? {
                 ...user,
                 firstName: formData.firstName,
                 lastName: formData.lastName,
@@ -305,80 +312,81 @@ export function UserManagement() {
                 entities: formData.entities,
                 permissions: formData.permissions,
               }
-              : user
-          )
+            : user
         )
-      } catch (error) {
-        console.error("Erro ao atualizar:", error)
-        toast({
-          title: "Erro",
-          description: "Erro ao se conectar com o servidor.",
-          variant: "destructive",
-        })
-        return
-      }
-    } else {
-      try {
-        const response = await fetch("/api/cadastro", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${localStorage.getItem("token") || ""}`, // ✅ aqui
-          },          
-          body: JSON.stringify({
-            firstName: formData.firstName,
-            lastName: formData.lastName,
-            email: formData.email,
-            password: formData.password,
-            entities: formData.entities,
-            permissions: formData.permissions,
-          }),
-        })
-
-        const data = await response.json()
-
-        if (!response.ok || !data.success) {
-          toast({
-            title: "Erro",
-            description: data.message || "Erro ao cadastrar o usuário.",
-            variant: "destructive",
-          })
-          return
-        }
-
-        toast({
-          title: "Usuário criado",
-          description: `O usuário ${formData.firstName} ${formData.lastName} foi criado com sucesso.`,
-        })
-
-        // Atualizar a lista local com o novo usuário
-        setUsers((prev) => [
-          ...prev,
-          {
-            id: `user-${Date.now()}`,
-            firstName: formData.firstName,
-            lastName: formData.lastName,
-            email: formData.email,
-            entities: formData.entities,
-            permissions: formData.permissions,
-            createdAt: new Date().toISOString(),
-          },
-        ])
-      } catch (error) {
-        console.error("Erro ao cadastrar:", error)
-        toast({
-          title: "Erro",
-          description: "Erro ao se conectar com o servidor.",
-          variant: "destructive",
-        })
-        return
-      }
+      )
+    } catch (error) {
+      console.error("Erro ao atualizar:", error)
+      toast({
+        title: "Erro",
+        description: "Erro ao se conectar com o servidor.",
+        variant: "destructive",
+      })
+      return
     }
+  } else {
+    try {
+      const response = await fetch("/api/cadastro", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token") || ""}`, // Inclusão do token
+        },
+        body: JSON.stringify({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          password: formData.password,
+          entities: formData.entities,
+          permissions: formData.permissions,
+        }),
+      })
 
-    // Após criar ou atualizar
-    setIsDialogOpen(false)
-    resetForm()
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        toast({
+          title: "Erro",
+          description: data.message || "Erro ao cadastrar o usuário.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      toast({
+        title: "Usuário criado",
+        description: `O usuário ${formData.firstName} ${formData.lastName} foi criado com sucesso.`,
+      })
+
+      // Atualizar a lista local com o novo usuário
+      setUsers((prev) => [
+        ...prev,
+        {
+          id: `user-${Date.now()}`,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          entities: formData.entities,
+          permissions: formData.permissions,
+          createdAt: new Date().toISOString(),
+        },
+      ])
+    } catch (error) {
+      console.error("Erro ao cadastrar:", error)
+      toast({
+        title: "Erro",
+        description: "Erro ao se conectar com o servidor.",
+        variant: "destructive",
+      })
+      return
+    }
   }
+
+  // Após criar ou atualizar
+  setIsDialogOpen(false)
+  resetForm()
+}
+
 
 
   const handleToggleAdminStatus = useCallback(() => {
@@ -426,9 +434,9 @@ export function UserManagement() {
       <div className="bg-muted p-4 rounded-md mb-6">
         <div className="flex items-center justify-between">
           <div>
-            <h4 className="font-medium">Usuário Administrador Padrão</h4>
+            <h4 className="font-medium">{user.name}</h4>
             <p className="text-sm text-muted-foreground">
-              Usuário: ADMIN | {isAdminDisabled ? "Desativado" : "Ativado"}
+              Usuário: ADMIN | {user.permissions?.includes("acess_config") ? "Ativado" : "Desativado"}
             </p>
           </div>
           <div className="flex items-center space-x-2">

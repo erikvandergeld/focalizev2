@@ -1,29 +1,32 @@
 import { NextRequest, NextResponse } from "next/server"
 import db from "@/lib/db"
-import jwt from "jsonwebtoken"
+import { verifyToken } from "@/lib/auth-middleware"  // Importando a função de verificação do token
 
-// Middleware inline para validação do token e da permissão
-async function checkPermission(req: NextRequest): Promise<{ authorized: boolean; decoded?: any }> {
-  const authHeader = req.headers.get("authorization")
-  const token = authHeader?.split(" ")[1]
-
-  if (!token) return { authorized: false }
-
+// Função segura para execução de consultas com liberação da conexão
+async function safeQuery(query: string, values: any[]) {
+  const connection = await db.getConnection()  // Obtém uma conexão do pool
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "*Ingline.Sys#9420%") as any
-    if (!decoded.permissions || !decoded.permissions.includes("acess_config")) {
-      return { authorized: false }
-    }
-
-    return { authorized: true, decoded }
-  } catch {
-    return { authorized: false }
+    const [rows]: any = await connection.execute(query, values)  // Executa a consulta
+    return rows
+  } finally {
+    connection.release()  // Libera a conexão para o pool
   }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const permissionCheck = await checkPermission(req)
-  if (!permissionCheck.authorized) {
+  // Usando o middleware de verificação de permissão
+  let decoded: any
+  try {
+    decoded = verifyToken(req)
+  } catch (err) {
+    if (err instanceof Error) {
+      return NextResponse.json({ success: false, message: err.message }, { status: 401 })
+    }
+    return NextResponse.json({ success: false, message: "Erro desconhecido" }, { status: 401 })
+  }
+
+  // Verificar se o usuário tem a permissão "acess_config"
+  if (!decoded.permissions?.includes("acess_config")) {
     return NextResponse.json({ success: false, message: "Acesso negado." }, { status: 403 })
   }
 
@@ -34,7 +37,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   }
 
   try {
-    const [result]: any = await db.execute("DELETE FROM entities WHERE id = ?", [id])
+    const result = await safeQuery("DELETE FROM entities WHERE id = ?", [id])
 
     if (result.affectedRows === 0) {
       return NextResponse.json({ success: false, message: "Entidade não encontrada." }, { status: 404 })
@@ -48,8 +51,19 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-  const permissionCheck = await checkPermission(req)
-  if (!permissionCheck.authorized) {
+  // Usando o middleware de verificação de permissão
+  let decoded: any
+  try {
+    decoded = verifyToken(req)
+  } catch (err) {
+    if (err instanceof Error) {
+      return NextResponse.json({ success: false, message: err.message }, { status: 401 })
+    }
+    return NextResponse.json({ success: false, message: "Erro desconhecido" }, { status: 401 })
+  }
+
+  // Verificar se o usuário tem a permissão "acess_config"
+  if (!decoded.permissions?.includes("acess_config")) {
     return NextResponse.json({ success: false, message: "Acesso negado." }, { status: 403 })
   }
 
@@ -61,7 +75,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 
   try {
-    const [result]: any = await db.execute("UPDATE entities SET name = ? WHERE id = ?", [name, id])
+    const result = await safeQuery("UPDATE entities SET name = ? WHERE id = ?", [name, id])
 
     if (result.affectedRows === 0) {
       return NextResponse.json({ success: false, message: "Entidade não encontrada." }, { status: 404 })

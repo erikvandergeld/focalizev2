@@ -1,43 +1,37 @@
-import { NextRequest, NextResponse } from "next/server"
-import db from "@/lib/db"
-import jwt from "jsonwebtoken"
+import { NextRequest, NextResponse } from "next/server";
+import db from "@/lib/db"; // Usando o pool de conexões
+import { verifyToken } from "@/lib/auth-middleware";
 
-// 🔐 Verificador de permissão
-async function checkPermission(req: NextRequest): Promise<{ authorized: boolean; decoded?: any }> {
-  const authHeader = req.headers.get("authorization")
-  const token = authHeader?.split(" ")[1]
-
-  if (!token) return { authorized: false }
-
+// Função para garantir a execução segura das consultas
+async function safeQuery(query: string, values: any[] = []): Promise<any> {
+  const connection = await db.getConnection();  // Obtém uma conexão do pool
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "*Ingline.Sys#9420%") as any
-
-    if (!decoded.permissions || !decoded.permissions.includes("acess_config")) {
-      return { authorized: false }
-    }
-
-    return { authorized: true, decoded }
-  } catch {
-    return { authorized: false }
+    const [rows] = await connection.execute(query, values);  // Executa a consulta
+    return rows;
+  } finally {
+    connection.release();  // Libera a conexão para o pool
   }
 }
 
-// ✅ PUT: Atualizar tag
+// Função PUT para atualizar uma tag
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-  const permissionCheck = await checkPermission(req)
-  if (!permissionCheck.authorized) {
-    return NextResponse.json({ success: false, message: "Acesso negado." }, { status: 403 })
+  let decoded: any;
+  try {
+    decoded = verifyToken(req);  // Verifica o token
+  } catch (err: any) {
+    return NextResponse.json({ success: false, message: err.message }, { status: 401 });  // Token inválido
   }
 
-  const { id } = params
-  const { name, color } = await req.json()
+  const { id } = params;
+  const { name, color } = await req.json();
 
   if (!name || !color) {
-    return NextResponse.json({ success: false, message: "Nome e cor são obrigatórios." }, { status: 400 })
+    return NextResponse.json({ success: false, message: "Nome e cor são obrigatórios." }, { status: 400 });
   }
 
   try {
-    await db.execute("UPDATE tags SET name = ?, color = ? WHERE id = ?", [name, color, id])
+    // Usando safeQuery para garantir que a conexão seja fechada
+    await safeQuery("UPDATE tags SET name = ?, color = ? WHERE id = ?", [name, color, id]);
 
     return NextResponse.json({
       success: true,
@@ -46,46 +40,53 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         name,
         color,
       },
-    })
+    });
   } catch (error) {
-    console.error("Erro ao atualizar tag:", error)
-    return NextResponse.json({ success: false, message: "Erro ao atualizar a tag." }, { status: 500 })
+    console.error("Erro ao atualizar tag:", error);
+    return NextResponse.json({ success: false, message: "Erro ao atualizar a tag." }, { status: 500 });
   }
 }
 
-// ✅ DELETE: Remover tag (se não estiver em uso)
+
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const permissionCheck = await checkPermission(req)
-  if (!permissionCheck.authorized) {
-    return NextResponse.json({ success: false, message: "Acesso negado." }, { status: 403 })
+  // Verifica o token e decodifica
+  let decoded: any;
+  try {
+    decoded = verifyToken(req);  // Verifica o token
+  } catch (err: any) {
+    return NextResponse.json({ success: false, message: err.message }, { status: 401 });  // Token inválido
   }
 
-  const tagId = params.id
+  const { id } = params;  // Esse já é o valor do `params` passado diretamente pela rota
+
+  if (!id) {
+    return NextResponse.json({ success: false, message: "ID não fornecido." }, { status: 400 });
+  }
 
   try {
-    // 🕵️ Verifica se algum cliente está usando essa tag
-    const [clientsUsingTag]: any = await db.query(
-      "SELECT id FROM clients WHERE JSON_CONTAINS(tags, JSON_QUOTE(?))",
-      [tagId]
-    )
+    // // Verifica se algum cliente está usando essa tag
+    // const [clientsUsingTag]: any = await db.query(
+    //   "SELECT id FROM clients WHERE JSON_CONTAINS(tags, JSON_QUOTE(?))",
+    //   [id]  // Aqui você está tentando verificar se a tag está associada ao cliente
+    // );
 
-    if (clientsUsingTag.length > 0) {
-      return NextResponse.json({
-        success: false,
-        message: "Não é possível excluir uma tag vinculada a um ou mais clientes.",
-      }, { status: 400 })
-    }
+    // if (clientsUsingTag.length > 0) {
+    //   return NextResponse.json({
+    //     success: false,
+    //     message: "Não é possível excluir uma tag vinculada a um ou mais clientes.",
+    //   }, { status: 400 });
+    // }
 
-    // ✅ Se não estiver em uso, exclui
-    const [result]: any = await db.query("DELETE FROM tags WHERE id = ?", [tagId])
+    // Excluir a tag
+    const [result]: any = await db.query("DELETE FROM tags WHERE id = ?", [id]);
 
     if (result.affectedRows === 0) {
-      return NextResponse.json({ success: false, message: "Tag não encontrada." }, { status: 404 })
+      return NextResponse.json({ success: false, message: "Tag não encontrada." }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, message: "Tag excluída com sucesso." });
   } catch (error) {
-    console.error("Erro ao excluir tag:", error)
-    return NextResponse.json({ success: false, message: "Erro interno." }, { status: 500 })
+    console.error("Erro ao excluir tag:", error);
+    return NextResponse.json({ success: false, message: "Erro interno." }, { status: 500 });
   }
 }

@@ -1,32 +1,32 @@
 import { NextRequest, NextResponse } from "next/server"
 import db from "@/lib/db"
-import jwt from "jsonwebtoken"
+import { verifyToken } from "@/lib/auth-middleware"
 
-// Função auxiliar para validar token e permissão
-// async function checkPermission(req: NextRequest): Promise<{ authorized: boolean; decoded?: any }> {
-//   const authHeader = req.headers.get("authorization")
-//   const token = authHeader?.split(" ")[1]
+// Função para garantir que as conexões sejam fechadas corretamente
+async function safeQuery(query: string, values: any[]) {
+  const connection = await db.getConnection()  // Obtém uma conexão do pool
+  try {
+    const [rows]: any = await connection.execute(query, values)  // Executa a consulta
+    return rows
+  } finally {
+    connection.release()  // Libera a conexão para o pool
+  }
+}
 
-//   if (!token) return { authorized: false }
-
-//   try {
-//     const decoded = jwt.verify(token, process.env.JWT_SECRET || "*Ingline.Sys#9420%") as any
-
-//     if (!decoded.permissions || !decoded.permissions.includes("acess_config")) {
-//       return { authorized: false }
-//     }
-
-//     return { authorized: true, decoded }
-//   } catch {
-//     return { authorized: false }
-//   }
-// }
-
+// Função para criar entidades
 export async function POST(req: NextRequest) {
-  // const permissionCheck = await checkPermission(req)
-  // if (!permissionCheck.authorized) {
-  //   return NextResponse.json({ success: false, message: "Acesso negado." }, { status: 403 })
-  // }
+  // Verificando o token e permissões do usuário
+  let decoded: any
+  try {
+    decoded = verifyToken(req) // Verifica token e obtém dados do usuário
+  } catch (err: any) {
+    return NextResponse.json({ success: false, message: err.message }, { status: 401 })
+  }
+
+  // Verifica se o usuário tem a permissão "acess_config"
+  if (!decoded.permissions || !decoded.permissions.includes("acess_config")) {
+    return NextResponse.json({ success: false, message: "Permissão negada" }, { status: 403 })
+  }
 
   try {
     const { id, name } = await req.json()
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
     const createdAt = new Date().toISOString().slice(0, 19).replace("T", " ")
 
-    await db.execute(
+    await safeQuery(
       "INSERT INTO entities (id, name, createdAt) VALUES (?, ?, ?)",
       [id, name, createdAt]
     )
@@ -49,14 +49,18 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// Função para buscar entidades
 export async function GET(req: NextRequest) {
-  // const permissionCheck = await checkPermission(req)
-  // if (!permissionCheck.authorized) {
-  //   return NextResponse.json({ success: false, message: "Acesso negado." }, { status: 403 })
-  // }
+  // Verificando o token e permissões do usuário
+  let decoded: any
+  try {
+    decoded = verifyToken(req) // Verifica o token JWT
+  } catch (err: any) {
+    return NextResponse.json({ success: false, message: err.message }, { status: 401 })
+  }
 
   try {
-    const [rows]: any = await db.query("SELECT * FROM entities ORDER BY name ASC")
+    const rows = await safeQuery("SELECT * FROM entities ORDER BY name ASC", [])
 
     return NextResponse.json({
       success: true,

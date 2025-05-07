@@ -12,6 +12,7 @@ import { useNotifications } from "./notification-provider"
 import { ConfirmDialog } from "./confirm-dialog"
 import { CommentDialog, type Comment } from "./comment-dialog"
 import { EditTaskDialog } from "./edit-task-dialog"
+import { useAuth } from "./auth-provider"
 
 // Dados de exemplo com comentários
 const tasks: any[] = []
@@ -26,6 +27,8 @@ export function TaskList({ projectId }: { projectId?: string }) {
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<any | null>(null)
+  const { user } = useAuth()
+
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -151,14 +154,13 @@ export function TaskList({ projectId }: { projectId?: string }) {
 
       // Atualiza a lista local removendo a tarefa
       const updatedTasks = taskList.filter((task) => task.id !== selectedTask.id)
+    
       setTaskList(updatedTasks)
 
-      addNotification(
-        "Tarefa excluída",
-        `A tarefa "${selectedTask.title}" para o cliente ${selectedTask.client} foi excluída.`
-      )
-
+      addNotification("Tarefa excluída", `A tarefa "${selectedTask.title}" foi excluída do sistema pelo usuário ${user?.name} com sucesso.`)
+      
       setDeleteDialogOpen(false)
+      
       setSelectedTask(null)
     } catch (error) {
       console.error("Erro ao excluir tarefa:", error)

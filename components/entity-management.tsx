@@ -17,7 +17,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
 import { ConfirmDialog } from "./confirm-dialog"
-
+import { useNotifications } from "./notification-provider"
+import { useAuth } from "./auth-provider"
+import { updateEntity } from "@/services/entity-service"
 // Tipos
 type Entity = {
   id: string
@@ -32,6 +34,10 @@ export function EntityManagement() {
   const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null)
   const [entityName, setEntityName] = useState("")
   const { toast } = useToast()
+  const { addNotification } = useNotifications()
+  const { user } = useAuth()
+
+
 
   const resetForm = () => {
     setEntityName("")
@@ -100,9 +106,11 @@ export function EntityManagement() {
       )
 
       toast({
-        title: "Entidade atualizada",
+        title: "Entidade atualizada!",
         description: `A entidade "${entityName}" foi atualizada com sucesso.`,
       })
+      addNotification("Entidade atualizada!", `A entidade "${selectedEntity.name}" foi atualizada no sistema com sucesso para ${entityName} pelo usuário ${user?.name}.`)
+
     } else {
       // CRIAÇÃO de nova entidade
       try {
@@ -129,10 +137,14 @@ export function EntityManagement() {
           return
         }
 
+
         toast({
           title: "Entidade criada",
           description: `A entidade "${entityName}" foi criada com sucesso.`,
         })
+
+        addNotification("Entidade criada!", `A entidade "${entityName}" foi adicionada com sucesso ao sistema pelo usuário ${user?.name}.`)
+
 
         // Atualizar lista após criar
         setEntities((prev) => [
@@ -162,7 +174,19 @@ export function EntityManagement() {
   useEffect(() => {
     const carregarEntidades = async () => {
       try {
-        const response = await fetch("/api/entidades")
+        const token = localStorage.getItem("token")  // Pega o token armazenado no localStorage
+        if (!token) {
+          console.error("Token não encontrado")
+          return
+        }
+
+        const response = await fetch("/api/entidades", {
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,  // Adiciona o token no cabeçalho
+          },
+        })
+
         const data = await response.json()
 
         if (response.ok && data.success) {
@@ -170,7 +194,7 @@ export function EntityManagement() {
         } else {
           toast({
             title: "Erro",
-            description: data.message || "Não foi possível carregar as entidades.",
+            description: data.message || "Erro ao buscar entidades.",
             variant: "destructive",
           })
         }
@@ -178,15 +202,14 @@ export function EntityManagement() {
         console.error("Erro ao carregar entidades:", error)
         toast({
           title: "Erro",
-          description: "Erro de conexão ao buscar entidades.",
+          description: "Erro ao se conectar com o servidor.",
           variant: "destructive",
         })
       }
     }
 
     carregarEntidades()
-  }, [])
-
+  }, [toast])  // Aqui, estamos apenas refazendo a requisição quando o toast mudar  
 
   const handleDeleteEntity = async () => {
     if (!selectedEntity) return
@@ -194,6 +217,10 @@ export function EntityManagement() {
     try {
       const response = await fetch(`/api/entidades/${selectedEntity.id}`, {
         method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token") || ""}`, // ✅ aqui
+        }
       })
 
       const data = await response.json()
@@ -210,11 +237,13 @@ export function EntityManagement() {
       setEntities((prev) => prev.filter((entity) => entity.id !== selectedEntity.id))
 
       toast({
-        title: "Entidade excluída",
-        description: `A entidade "${selectedEntity.name}" foi excluída com sucesso.`,
+        title: "Entidade excluída!",
+        description: `A entidade "${selectedEntity.name}" foi excluída do sistema com sucesso.`,
       })
+      addNotification("Entidade excluída!", `A entidade "${selectedEntity.name}" foi excluída do sistema com sucesso pelo usuário ${user?.name}.`)
     } catch (error) {
       console.error("Erro ao excluir entidade:", error)
+      addNotification("Erro ao excluir entidade", `Erro ao excluir a entidade "${selectedEntity?.name}" Usuário: ${user?.name}`)
       toast({
         title: "Erro",
         description: "Erro ao se conectar com o servidor.",

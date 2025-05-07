@@ -90,10 +90,10 @@ export function EditTaskDialog({ open, onOpenChange, task, onSave }: EditTaskDia
 
     try {
       await onSave(task.id, updatedTask) // Chama a função onSave que envia a requisição
-      addNotification("Tarefa atualizada", `A tarefa "${title}" foi atualizada.`)
+      addNotification("Tarefa atualizada", `A tarefa "${title}" foi atualizada com sucesso pelo usuário ${user?.name}.`)
       onOpenChange(false) // Fecha o diálogo
     } catch (error) {
-      addNotification("Erro ao atualizar tarefa", "Não foi possível atualizar a tarefa. Tente novamente.")
+      addNotification("Erro ao atualizar tarefa", `O usuário ${user?.name} não tem permissão para editar essa tarefa.", "destructive`)
     }
   }
 

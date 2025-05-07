@@ -1,32 +1,30 @@
 import { NextRequest, NextResponse } from "next/server"
 import db from "@/lib/db"
-import jwt from "jsonwebtoken"
+import { verifyToken } from "@/lib/auth-middleware"  // Importa o middleware para verificar o token JWT
 
-// function checkPermission(req: NextRequest) {
-//     const authHeader = req.headers.get("authorization")
-//     const token = authHeader?.split(" ")[1]
-
-//     if (!token) return null
-
-//     try {
-//         const decoded = jwt.verify(token, process.env.JWT_SECRET || "*default-secret*") as any
-//         if (!decoded.permissions || !decoded.permissions.includes("acess_config")) return null
-//         return decoded
-//     } catch {
-//         return null
-//     }
-// }
-
+// 🔒 POST - Criar projeto
 export async function POST(req: NextRequest) {
-    // const decoded = checkPermission(req)
-    // if (!decoded) {
-    //     return NextResponse.json({ success: false, message: "Acesso negado." }, { status: 403 })
-    // }
+    let decoded: any
+    try {
+        decoded = verifyToken(req)  // Verificação do token JWT
+    } catch (err: any) {
+        return NextResponse.json({ success: false, message: err.message }, { status: 401 })  // Token inválido
+    }
+
+    if (!decoded.permissions?.includes("create_task")) {
+        return NextResponse.json({ success: false, message: "Permissão negada." }, { status: 403 })  // Permissão negada
+    }
 
     const { name, description, client, entity, status } = await req.json()
 
+    // Verificar se todos os dados obrigatórios foram enviados
     if (!name || !client || !entity || !status) {
         return NextResponse.json({ success: false, message: "Dados incompletos." }, { status: 400 })
+    }
+
+    // Verificar se a entidade pertence ao usuário (somente entidades associadas ao usuário podem ser usadas)
+    if (!decoded.entities.includes(entity)) {
+        return NextResponse.json({ success: false, message: "Você não tem permissão para criar projetos nesta entidade." }, { status: 403 })
     }
 
     const id = `project-${Date.now()}`
@@ -45,14 +43,22 @@ export async function POST(req: NextRequest) {
     }
 }
 
-//GET para buscar todos os projetos
+// 🔒 GET - Listar projetos
 export async function GET(req: NextRequest) {
-    // const user = checkPermission(req)
-    // if (!user) {
-    //   return NextResponse.json({ success: false, message: "Acesso negado." }, { status: 403 })
-    // }
+    let decoded: any
+    try {
+        decoded = verifyToken(req)  // Verificação do token JWT
+    } catch (err: any) {
+        return NextResponse.json({ success: false, message: err.message }, { status: 401 })  // Token inválido
+    }
+
+    // Garantir que o usuário tenha a permissão de "create_task"
+    if (!decoded.permissions?.includes("create_task")) {
+        return NextResponse.json({ success: false, message: "Permissão negada." }, { status: 403 })  // Permissão negada
+    }
 
     try {
+        // Buscar todos os projetos, incluindo os dados de cliente e entidade
         const [rows]: any = await db.query(`
             SELECT 
                 p.id,
@@ -69,7 +75,12 @@ export async function GET(req: NextRequest) {
             ORDER BY p.createdAt DESC
         `)
 
-        return NextResponse.json({ success: true, projetos: rows })
+        // Filtrando os projetos para garantir que o usuário só veja projetos das entidades a que ele tem acesso
+        const filteredProjects = rows.filter((project: any) =>
+            decoded.entities.includes(project.entity)  // Só mostrar projetos de entidades do usuário
+        )
+
+        return NextResponse.json({ success: true, projetos: filteredProjects })
     } catch (error) {
         console.error("Erro ao buscar projetos:", error)
         return NextResponse.json({ success: false, message: "Erro ao buscar projetos" }, { status: 500 })

@@ -37,17 +37,24 @@ export function ClientList() {
   useEffect(() => {
     const carregarClientes = async () => {
       try {
-        const response = await fetch("/api/clientes")
+        const token = localStorage.getItem("token")
+        const response = await fetch("/api/clientes", {
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token} || ""}`, // ✅ aqui
+          },
+        })
+  
         const data = await response.json()
   
         if (response.ok && data.success && Array.isArray(data.clientes)) {
           setClients(data.clientes)
         } else {
-          setClients([]) // ✅ evita undefined
+          setClients([])
         }
       } catch (error) {
         console.error("Erro ao carregar clientes:", error)
-        setClients([]) // ✅ fallback seguro
+        setClients([])
       }
     }
   
@@ -74,6 +81,10 @@ export function ClientList() {
     try {
       const response = await fetch(`/api/clientes/${selectedClient.id}`, {
         method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token") || ""}`,
+        },
       })
       const data = await response.json()
 

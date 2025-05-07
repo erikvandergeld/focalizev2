@@ -19,9 +19,10 @@ interface TaskFiltersProps {
   onFilterChange: (filters: any) => void
   availableProjects: { id: string; name: string }[]
   availableClients: { id: string; name: string }[]
-  availableUsers: { id: string; name: string }[]
+  availableUsers: { id: string; full_name: string }[] // Usando full_name em vez de firstName e lastName
   availableEntities: { id: string; name: string }[]
 }
+
 
 export function TaskFilters({
   onFilterChange,
@@ -29,8 +30,7 @@ export function TaskFilters({
   availableClients = [],
   availableUsers = [],
   availableEntities = [],
-}: TaskFiltersProps)
-{
+}: TaskFiltersProps) {
   const [taskTypes] = useState([
     { id: "administrative", name: "Administrativo" },
     { id: "technical", name: "Técnico" },
@@ -64,12 +64,15 @@ export function TaskFilters({
     return () => clearTimeout(timer)
   }, [search, activeFilters, onFilterChange])
 
+  // Função de toggle para adicionar ou remover filtros
   const toggleFilter = useCallback((category: keyof typeof activeFilters, id: string) => {
     setActiveFilters((prev) => {
       const newFilters = { ...prev }
       if (newFilters[category].includes(id)) {
+        // Remover filtro
         newFilters[category] = newFilters[category].filter((item) => item !== id)
       } else {
+        // Adicionar filtro
         newFilters[category] = [...newFilters[category], id]
       }
       return newFilters
@@ -88,6 +91,7 @@ export function TaskFilters({
   }, [])
 
   const totalActiveFilters = Object.values(activeFilters).reduce((sum, filters) => sum + filters.length, 0)
+
 
   return (
     <div className="flex flex-col w-full max-w-full">
@@ -207,7 +211,7 @@ export function TaskFilters({
                   checked={activeFilters.users.includes(user.id)}
                   onCheckedChange={() => toggleFilter("users", user.id)}
                 >
-                  {user.name}
+                  {user.full_name} {/* Exibe o nome completo */}
                 </DropdownMenuCheckboxItem>
               ))
             )}
@@ -290,7 +294,7 @@ export function TaskFilters({
             const user = availableUsers.find((u) => u.id === id)
             return user ? (
               <Badge key={`user-${id}`} variant="outline" className="flex items-center gap-1">
-                {user.name}
+                {user.full_name} {/* Exibe o nome completo */}
                 <Button
                   variant="ghost"
                   size="sm"

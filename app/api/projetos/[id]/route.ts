@@ -1,50 +1,93 @@
 import { NextRequest, NextResponse } from "next/server"
 import db from "@/lib/db"
-import jwt from "jsonwebtoken"
+import { verifyToken } from "@/lib/auth-middleware"  // Importando a função verifyToken
 
-function checkPermission(req: NextRequest) {
-  const authHeader = req.headers.get("authorization")
-  const token = authHeader?.split(" ")[1]
+// Função PUT para atualizar um projeto
+export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+  let decoded: any
+  try {
+    decoded = verifyToken(req)  // Verifica o token e decodifica
+  } catch (err: any) {
+    return NextResponse.json({ success: false, message: err.message }, { status: 401 })  // Se token inválido, retorna 401
+  }
 
-  if (!token) return null
+  // Verifica se o usuário tem permissão para editar projetos
+  if (!decoded.permissions?.includes("create_task")) { 
+    return NextResponse.json({ success: false, message: "Permissão negada." }, { status: 403 })  // Se não tem permissão, retorna 403
+  }
+
+  const userEntities = decoded.entities || []  // Entidades do usuário logado
+  const { name, description, client, entity, status } = await req.json()
+
+  if (!name || !client || !entity || !status) {
+    return NextResponse.json({ success: false, message: "Campos obrigatórios faltando." }, { status: 400 })  // Validação de campos obrigatórios
+  }
+
+  // Verifica se a entidade fornecida pertence ao usuário
+  if (!userEntities.includes(entity)) {
+    return NextResponse.json({ success: false, message: "Você não tem permissão para atualizar projetos nesta entidade." }, { status: 403 })  // Se a entidade não pertence ao usuário, retorna 403
+  }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "*default-secret*") as any
-    if (!decoded.permissions || !decoded.permissions.includes("acess_config")) return null
-    return decoded
-  } catch {
-    return null
+    const [result]: any = await db.query(
+      `UPDATE projects
+       SET name = ?, description = ?, client = ?, entity = ?, status = ?, updatedAt = NOW()
+       WHERE id = ?`,
+      [name, description, client, entity, status, params.id]
+    )
+
+    // Verifica se o projeto foi encontrado e atualizado
+    if (result.affectedRows === 0) {
+      return NextResponse.json({ success: false, message: "Projeto não encontrado." }, { status: 404 })  // Se não encontrou o projeto, retorna 404
+    }
+
+    return NextResponse.json({ success: true, message: "Projeto atualizado com sucesso." })  // Sucesso ao atualizar
+  } catch (error) {
+    console.error("Erro ao atualizar projeto:", error)
+    return NextResponse.json({ success: false, message: "Erro ao atualizar projeto." }, { status: 500 })  // Se houver erro, retorna 500
   }
 }
 
-
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
-    const id = params.id
-    const body = await req.json()
-  
-    const { name, description, client, entity, status } = body
-  
-    if (!name || !client || !entity || !status) {
-      return NextResponse.json(
-        { success: false, message: "Campos obrigatórios faltando." },
-        { status: 400 }
-      )
-    }
-  
-    try {
-      const [result] = await db.query(
-        `UPDATE projects
-         SET name = ?, description = ?, client = ?, entity = ?, status = ?, updatedAt = NOW()
-         WHERE id = ?`,
-        [name, description, client, entity, status, id]
-      )
-  
-      return NextResponse.json({ success: true, message: "Projeto atualizado com sucesso." })
-    } catch (error) {
-      console.error("[PUT /projetos/:id]", error)
-      return NextResponse.json(
-        { success: false, message: "Erro ao atualizar projeto." },
-        { status: 500 }
-      )
-    }
+// Função GET para recuperar um projeto
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  let decoded: any
+  try {
+    decoded = verifyToken(req)  // Verifica o token e decodifica
+  } catch (err: any) {
+    return NextResponse.json({ success: false, message: err.message }, { status: 401 })  // Se token inválido, retorna 401
   }
+
+  // Verifica se o usuário tem permissão para visualizar projetos
+  if (!decoded.permissions?.includes("delete_project")) {
+    return NextResponse.json({ success: false, message: "Permissão negada." }, { status: 403 })  // Se não tem permissão, retorna 403
+  }
+
+  const userEntities = decoded.entities || []  // Entidades do usuário logado
+
+  try {
+    const [project]: any = await db.query(
+      `SELECT id, name, description, client, entity, status
+       FROM projects
+       WHERE id = ?`,
+      [params.id]
+    )
+
+    // Verifica se o projeto foi encontrado
+    if (!project) {
+      return NextResponse.json({ success: false, message: "Projeto não encontrado." }, { status: 404 })  // Se não encontrou o projeto, retorna 404
+    }
+
+    // // Verifica se a entidade do projeto pertence ao usuário
+    // if (!userEntities.includes(project.entity)) {
+    //   console.log(project.entity);
+    //   return NextResponse.json({ success: false, message: "Você não tem permissão para acessar este projeto." }, { status: 403 })  // Se a entidade não pertence ao usuário, retorna 403
+    // }
+
+    // Retorna os dados do projeto
+    return NextResponse.json({ success: true, project })  // Sucesso, retornando os dados do projeto
+
+  } catch (error) {
+    console.error("Erro ao recuperar projeto:", error)
+    return NextResponse.json({ success: false, message: "Erro ao recuperar projeto." }, { status: 500 })  // Se houver erro, retorna 500
+  }
+}

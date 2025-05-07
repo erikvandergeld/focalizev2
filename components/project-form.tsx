@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -11,9 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 import { useNotifications } from "./notification-provider"
-
-// Dados de exemplo para projetos
-const projectsData: Record<string, any> = {}
+import { useAuth } from "./auth-provider"
 
 interface ProjectFormProps {
   projectId?: string
@@ -28,16 +24,15 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingData, setIsLoadingData] = useState(!!projectId)
   const router = useRouter()
+  const { user } = useAuth()
   const { toast } = useToast()
   const { addNotification } = useNotifications()
 
-  // Substituir dados de exemplo por estados
   const [availableClients, setAvailableClients] = useState<{ id: string; name: string; entities: string[] }[]>([])
   const [availableEntities, setAvailableEntities] = useState<{ id: string; name: string }[]>([])
 
-  // Adicionar useEffect para carregar dados
+  // 1. Carregar listas de Entidades e Clientes
   useEffect(() => {
-    // Em um sistema real, isso seria uma chamada à API
     const loadData = async () => {
       const token = localStorage.getItem("token")
       const headers = {
@@ -48,7 +43,7 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
         const responseEntities = await fetch("/api/entidades", { headers })
         const entidadesData = await responseEntities.json()
         setAvailableEntities(entidadesData.entidades)
-    
+
         const responseClients = await fetch("/api/clientes", { headers })
         const clientesData = await responseClients.json()
         setAvailableClients(clientesData.clientes)
@@ -60,38 +55,36 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
           variant: "destructive",
         })
       }
-    }    
+    }
     loadData()
   }, [])
 
-  // Carregar dados do projeto se estiver editando
+  // 2. Carregar dados do projeto para edição (se projectId estiver presente)
   useEffect(() => {
     if (projectId) {
       const loadProject = async () => {
         try {
-          // Simulação de carregamento de dados
-          await new Promise((resolve) => setTimeout(resolve, 500))
-
           const token = localStorage.getItem("token")
           const headers = {
             Authorization: `Bearer ${token}`,
           }
-          
+
           const response = await fetch(`/api/projetos/${projectId}`, { headers })
           const data = await response.json()
-          
+
           if (!response.ok || !data.success) {
             throw new Error(data.message || "Erro ao buscar projeto")
           }
-          
-          const project = data.projeto
-          
+
+          const project = data.project
+
+          // Atualiza o estado com os dados do projeto
           setName(project.name)
           setDescription(project.description)
           setClient(project.client)
           setEntity(project.entity)
           setStatus(project.status)
-          
+
         } catch (error) {
           toast({
             title: "Erro ao carregar projeto",
@@ -99,7 +92,7 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
             variant: "destructive",
           })
         } finally {
-          setIsLoadingData(false)
+          setIsLoadingData(false) // Atualiza o estado para falso depois do carregamento
         }
       }
 
@@ -110,15 +103,12 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
   // Filtrar clientes com base na entidade selecionada
   const filteredClients = entity ? availableClients.filter((c) => c.entities.includes(entity)) : availableClients
 
+  // 3. Função para salvar ou atualizar o projeto
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
 
     try {
-      // Simulação de envio para API
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Encontrar o nome do cliente pelo ID
       const clientName = availableClients.find((c) => c.id === client)?.name || "Cliente"
       const entityName = availableEntities.find((e) => e.id === entity)?.name || "Entidade"
 
@@ -127,7 +117,9 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       }
+
       if (projectId) {
+        // Se existe projectId, significa que é uma atualização (PUT)
         const response = await fetch(`/api/projetos/${projectId}`, {
           method: "PUT",
           headers,
@@ -156,8 +148,10 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
           `O projeto "${name}" foi atualizado com sucesso.`
         )
 
+        // Redireciona para a página de detalhes do projeto
         router.push(`/dashboard/projects/${projectId}`)
       } else {
+        // Se não existe projectId, significa que é uma criação (POST)
         const response = await fetch("/api/projetos", {
           method: "POST",
           headers,
@@ -183,10 +177,11 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
 
         addNotification(
           "Novo projeto criado",
-          `O projeto "${name}" foi criado com sucesso.`
+          `O projeto "${name}" foi criado com sucesso pelo usuário ${user?.name}`
         )
 
-        router.push("/dashboard")
+        // Redireciona para a página de lista de projetos
+        router.push("/dashboard/projects")
       }
     } catch (error) {
       toast({
@@ -194,11 +189,16 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
         description: "Ocorreu um erro. Tente novamente.",
         variant: "destructive",
       })
+      addNotification(
+        "Erro ao criar projeto",
+        `Erro ao ${projectId ? "atualizar" : "criar"} projeto "${name}".`,
+      )
     } finally {
       setIsLoading(false)
     }
   }
 
+  // Exibir tela de carregamento enquanto isLoadingData é verdadeiro
   if (isLoadingData) {
     return <div className="flex justify-center p-4">Carregando...</div>
   }

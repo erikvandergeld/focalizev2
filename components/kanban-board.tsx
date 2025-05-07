@@ -4,7 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { MoreHorizontal, MessageSquare, Pencil, Trash2, Archive, Tag } from "lucide-react"
+import { MoreHorizontal, MessageSquare, Pencil, Trash2, Archive, Tag, Paperclip } from "lucide-react"
+import { AttachmentDialog } from "@/components/attachmentdialog"
+import { AttachmentViewDialog } from "@/components/attachment-view-dialog"
+
+
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +44,7 @@ import { EditTaskDialog } from "./edit-task-dialog"
 import { TaskFilters } from "./task-filters"
 import { useAuth } from "./auth-provider"
 
+
 // Tipos para as tarefas e colunas
 type TagType = {
   id: string
@@ -46,27 +52,31 @@ type TagType = {
   color: string
 }
 
-type Task = {
-  id: string
-  title: string
-  description: string
-  client: string
-  assignee: { id: string; full_name: string } | string | null  // 👈 atualizado
-  entity: string
-  project: string | null
-  taskType: "administrative" | "technical"
-  comments: Comment[]
-  status: "pending" | "in-progress" | "completed"
-  completedAt: string | null
-  archivedAt: string | null
-  tags: TagType[]
+export type Task = {
+  id: string;
+  title: string;
+  description: string;
+  client: string;
+  assignee: { id: string; full_name: string } | string | null;
+  entity_name: string;
+  entity: string;
+  project: string | null;
+  taskType: "administrative" | "technical";
+  comments: Comment[];
+  status: "pending" | "in-progress" | "completed" | "archived";
+  completedAt: string | null;
+  archivedAt: string | null;
+  tags: TagType[];
+  attachments?: { id: string; name: string; url: string }[]; // Novo campo
 }
+
 
 type Column = {
   id: string
   title: string
   tasks: Task[]
 }
+
 
 
 // Helper function to determine if text should be white or black based on background color
@@ -84,6 +94,10 @@ const getContrastColor = (hexColor: string) => {
   return luminance > 0.5 ? "#000000" : "#ffffff"
 }
 
+
+
+
+
 // Componente de tarefa arrastável
 function SortableTaskCard({
   task,
@@ -91,12 +105,16 @@ function SortableTaskCard({
   onOpenEditDialog,
   onOpenDeleteDialog,
   onOpenArchiveDialog,
+  onUploadAttachment, // 👈 Adicionado
+  onViewAttachments, // ✅ aqui  
 }: {
   task: Task
   onOpenCommentDialog: (task: Task) => void
   onOpenEditDialog: (task: Task) => void
   onOpenDeleteDialog: (task: Task) => void
   onOpenArchiveDialog: (task: Task) => void
+  onUploadAttachment: (task: Task) => void // 👈 Adicionado
+  onViewAttachments: (task: Task) => void // ✅ aqui
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -109,6 +127,36 @@ function SortableTaskCard({
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 1 : 0,
   }
+
+  // Função para renderizar os anexos
+  const renderAttachments = (attachments: any) => {
+    if (!attachments || attachments.length === 0) {
+      return <div>Nenhum anexo encontrado.</div>;
+    }
+
+
+    return (
+      <div className="attachments">
+        {attachments.map((attachment: any) => (
+          <div key={attachment.id} className="attachment-item">
+            <a href={attachment.url} target="_blank" rel="noopener noreferrer">
+              <Paperclip className="h-4 w-4 mr-2" /> {attachment.name}
+            </a>
+            {/* Adiciona um botão para baixar o arquivo */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open(attachment.url, "_blank")}
+            >
+              Baixar
+            </Button>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+
 
   const renderTaskTags = (tags: TagType[]) => {
     return tags?.length ? (
@@ -129,6 +177,8 @@ function SortableTaskCard({
       </div>
     ) : null
   }
+
+
 
   const assigneeName =
     typeof task.assignee === "string"
@@ -165,6 +215,10 @@ function SortableTaskCard({
             <DropdownMenuItem onClick={() => onOpenCommentDialog(task)}>
               <MessageSquare className="h-4 w-4 mr-2" /> Comentários
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onUploadAttachment(task)}>
+              <Paperclip className="h-4 w-4 mr-2" /> Anexo
+            </DropdownMenuItem>
+
             {task.status === "completed" && (
               <DropdownMenuItem onClick={() => onOpenArchiveDialog(task)}>
                 <Archive className="h-4 w-4 mr-2" /> Arquivar
@@ -190,6 +244,7 @@ function SortableTaskCard({
       {renderTaskTags(task.tags)}
       <p className="text-xs text-muted-foreground mb-3">{task.description}</p>
 
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Avatar className="h-6 w-6">
@@ -199,7 +254,7 @@ function SortableTaskCard({
         </div>
 
         <div className="flex items-center gap-1">
-          <Badge variant="outline" className="text-xs">{task.entity}</Badge>
+          <Badge variant="outline" className="text-xs">{task.entity_name}</Badge>
           <Button
             variant="ghost"
             size="sm"
@@ -209,13 +264,20 @@ function SortableTaskCard({
             <MessageSquare className="h-3 w-3" />
             <span>{task.comments.length}</span>
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs flex items-center gap-1"
+            onClick={() => onViewAttachments(task)}
+          >
+            <Paperclip className="h-4 w-4 mr-2" /> Visualizar Anexos
+          </Button>
         </div>
       </div>
     </div>
   )
 }
 
-// Componente de coluna com área de soltar
 function DroppableColumn({
   column,
   tasks,
@@ -223,6 +285,8 @@ function DroppableColumn({
   onOpenEditDialog,
   onOpenDeleteDialog,
   onOpenArchiveDialog,
+  onUploadAttachment,
+  onViewAttachments, // ✅ aqui
 }: {
   column: Column
   tasks: Task[]
@@ -230,6 +294,8 @@ function DroppableColumn({
   onOpenEditDialog: (task: Task) => void
   onOpenDeleteDialog: (task: Task) => void
   onOpenArchiveDialog: (task: Task) => void
+  onUploadAttachment: (task: Task) => void
+  onViewAttachments: (task: Task) => void // ✅ aqui
 }) {
   // Usar o hook useDroppable para tornar a coluna uma área de soltar
   const { setNodeRef, isOver } = useDroppable({
@@ -240,8 +306,18 @@ function DroppableColumn({
     },
   })
 
+
   return (
-    <div className="flex flex-col w-full">
+    <div
+      ref={setNodeRef} // Aplique o ref diretamente na coluna inteira para garantir que a área de soltura seja maior
+      className={`flex flex-col w-full bg-transparent ${isOver ? "bg-accent/50" : ""}`}
+      style={{
+        minHeight: "300px", // Garante que a área de soltura seja maior
+        flexGrow: 1, // Expande para ocupar todo o espaço disponível
+        cursor: isOver ? "copy" : "move", // Altera o cursor quando o item está sobre a coluna
+        padding: "1rem", // Aumenta o espaço ao redor das tarefas
+      }}
+    >
       <Card className="h-full w-full">
         <CardHeader className="pb-2">
           <CardTitle className="text-lg flex items-center justify-between">
@@ -250,11 +326,8 @@ function DroppableColumn({
           </CardTitle>
         </CardHeader>
         <CardContent className="flex-1">
-          <div
-            ref={setNodeRef}
-            className={`kanban-column space-y-3 min-h-[200px] p-2 rounded-md ${isOver ? "bg-accent/50" : ""}`}
-            style={{ minHeight: "200px" }}
-          >
+          {/* Tarefas são mapeadas para a zona de soltura */}
+          <div className="kanban-column space-y-3">
             <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
               {tasks.map((task) => (
                 <SortableTaskCard
@@ -264,6 +337,8 @@ function DroppableColumn({
                   onOpenEditDialog={onOpenEditDialog}
                   onOpenDeleteDialog={onOpenDeleteDialog}
                   onOpenArchiveDialog={onOpenArchiveDialog}
+                  onUploadAttachment={onUploadAttachment}
+                  onViewAttachments={onViewAttachments} // ✅ aqui
                 />
               ))}
             </SortableContext>
@@ -289,12 +364,14 @@ export function KanbanBoard() {
   const [filters, setFilters] = useState<any>({})
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([])
   const [clients, setClients] = useState<{ id: string; name: string }[]>([])
-  const [users, setUsers] = useState<{ id: string; name: string }[]>([])
+  const [users, setUsers] = useState<{ id: string; full_name: string }[]>([])
   const [entities, setEntities] = useState<{ id: string; name: string }[]>([])
-
+  const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false)
+  const [attachmentViewDialogOpen, setAttachmentViewDialogOpen] = useState(false);
+  const [taskToViewAttachments, setTaskToViewAttachments] = useState<Task | null>(null);
+  const [taskToAttach, setTaskToAttach] = useState<Task | null>(null)
   const { addNotification } = useNotifications()
   const { user } = useAuth()
-
   const [commentDialogOpen, setCommentDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -307,10 +384,10 @@ export function KanbanBoard() {
 
   useEffect(() => {
     const fetchData = async () => {
-      try {
-        const token = localStorage.getItem("token")
-        const headers = { Authorization: `Bearer ${token}` }
+      const token = localStorage.getItem("token")  // Recupera o token do localStorage
+      const headers = { Authorization: `Bearer ${token}` }
 
+      try {
         const [tasksRes, projectsRes, clientsRes, usersRes, entitiesRes] = await Promise.all([
           fetch("/api/tarefas", { headers }),
           fetch("/api/projetos", { headers }),
@@ -349,16 +426,23 @@ export function KanbanBoard() {
 
         if (projectsData.success) setProjects(projectsData.projetos || [])
         if (clientsData.success) setClients(clientsData.clientes || [])
-        if (usersData.success) setUsers(usersData.usuarios || [])
+        if (usersData.success) {
+          const updateUsers = usersData.usuarios.map((u: any) => ({
+            id: u.id,
+            full_name: `${u.firstName} ${u.lastName}`.trim(),
+          }))
+          setUsers(updateUsers || []);
+        }
         if (entitiesData.success) setEntities(entitiesData.entidades || [])
 
       } catch (error) {
         console.error("Erro ao carregar dados:", error)
+        addNotification("Erro", "Não foi possível carregar os dados.")
       }
     }
 
     fetchData()
-  }, [])
+  }, [addNotification])
 
 
 
@@ -391,6 +475,8 @@ export function KanbanBoard() {
         typeof task.assignee === "string"
           ? task.assignee
           : task.assignee?.full_name || ""
+
+
 
       const assigneeId =
         typeof task.assignee === "object" && task.assignee?.id
@@ -473,10 +559,10 @@ export function KanbanBoard() {
     return {
       columns: data.columns.map((column) => ({
         ...column,
-        tasks: column.tasks.filter(applyFilters),
+        tasks: column.tasks.filter((task) => task.status !== "archived"), // Filtrando tarefas arquivadas
       })),
-    }
-  }, [data, applyFilters])
+    };
+  }, [data]);
 
   // Verificar tarefas que precisam ser arquivadas automaticamente (48 horas após conclusão)
   useEffect(() => {
@@ -544,6 +630,58 @@ export function KanbanBoard() {
     setFilters(newFilters)
   }, [])
 
+
+  const handleUploadAttachment = async (file: File) => {
+    const task = taskToAttach;
+    if (!task || !user) return;
+
+    const token = localStorage.getItem("token");
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch(`/api/tarefas/${task.id}/anexos`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.message != "Success") {
+        throw new Error(data.message || "Erro ao enviar anexo");
+      }
+
+      // Atualize o estado com o fileUrl retornado
+      setData((prev) => {
+        const updatedColumns = prev.columns.map((col) => ({
+          ...col,
+          tasks: col.tasks.map((t) =>
+            t.id === task.id ? { ...t, attachments: [...(t.attachments || []), data.fileUrl] } : t
+          ),
+        }));
+        return { columns: updatedColumns };
+      });
+
+      addNotification("Anexo enviado", `Arquivo adicionado à tarefa "${task.title}".`);
+
+    } catch (err) {
+      addNotification("Erro", "Falha ao enviar anexo.");
+      console.error(err);
+      console.log("Deu erro, mesmo o arquivo sendo enviado para o diretório");
+    }
+  };
+
+
+  const handleOpenAttachmentDialog = (task: Task) => {
+    setTaskToAttach(task)
+    setAttachmentDialogOpen(true)
+  }
+
+  const handleOpenAttachmentViewDialog = (task: Task) => {
+    setTaskToViewAttachments(task)
+    setAttachmentViewDialogOpen(true)
+  }
   // Função para abrir o diálogo de comentários
   const handleOpenCommentDialog = useCallback((task: Task) => {
     setSelectedTask(task)
@@ -635,7 +773,10 @@ export function KanbanBoard() {
   };
 
   const handleSaveTask = async (taskId: string, updatedTask: any) => {
-    console.log("Atualizando tarefa:", taskId, updatedTask);  // Log para depuração
+    if (!user) {
+      addNotification("Erro", "Você precisa estar logado para atualizar a tarefa.")
+      return false
+    }
 
     const token = localStorage.getItem("token")
     const headers = {
@@ -652,25 +793,21 @@ export function KanbanBoard() {
 
       const data = await response.json()
 
-      console.log("Resposta do servidor:", data);  // Log da resposta
 
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Erro ao atualizar tarefa.")
       }
 
-
       // Se a atualização for bem-sucedida, retorna para o diálogo
-      addNotification("Tarefa atualizada", `A tarefa "${updatedTask.title}" foi atualizada.`)
+      addNotification(`Tarefa atualizada`, `Usuário ${user?.name} atualizou a tarefa ${selectedTask?.title} para ${updatedTask.title}`)
       return true
     } catch (error) {
-      console.error("Erro ao atualizar tarefa:", error)
-      addNotification("Erro ao atualizar tarefa", "Não foi possível atualizar a tarefa. Tente novamente.")
+      addNotification(`Erro ao atualizar tarefa`, `Usuário ${user?.name} não possui permissão para atualizar a tarefa: ${selectedTask?.title}! Tente novamente.`);
       throw error
     }
   }
 
 
-  // Função para excluir uma tarefa
   const handleDeleteTask = useCallback(() => {
     if (!selectedTask) return
 
@@ -683,41 +820,83 @@ export function KanbanBoard() {
 
     // Usar um timeout para garantir que a notificação seja enviada após a renderização
     setTimeout(() => {
-      if (!isMountedRef.current) return
-
       addNotification(
         "Tarefa excluída",
-        `A tarefa "${selectedTask.title}" para o cliente ${selectedTask.client} foi excluída.`,
+        `O usuário ${user?.name} excluiu a tarefa "${selectedTask.title}" para o cliente ${selectedTask.client}`,
       )
     }, 0)
 
     setDeleteDialogOpen(false)
   }, [selectedTask, addNotification])
 
-  // Função para arquivar uma tarefa
-  const handleArchiveTask = useCallback(() => {
-    if (!selectedTask) return
+  const handleArchiveTask = useCallback(async () => {
+    if (!selectedTask) return;
 
-    // Remover a tarefa da coluna "completed"
+    // Atualizando o status da tarefa para "archived" e registrando a data de arquivamento
+    const updatedTask: Task = {
+      ...selectedTask,
+      status: "archived",
+      archivedAt: new Date().toISOString(), // Registrando o momento do arquivamento
+    };
+
+    // Atualizando o estado local com a tarefa arquivada
     setData((prevData) => ({
       columns: prevData.columns.map((column) => ({
         ...column,
-        tasks: column.tasks.filter((task) => task.id !== selectedTask.id),
+        tasks: column.tasks.map((task) =>
+          task.id === selectedTask.id ? updatedTask : task
+        ),
       })),
-    }))
+    }));
 
-    // Usar um timeout para garantir que a notificação seja enviada após a renderização
-    setTimeout(() => {
-      if (!isMountedRef.current) return
+    // Enviar a atualização para o backend
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Token não encontrado");
+      }
 
-      addNotification(
-        "Tarefa arquivada",
-        `A tarefa "${selectedTask.title}" para o cliente ${selectedTask.client} foi arquivada.`,
-      )
-    }, 0)
+      const response = await fetch(`/api/tarefas/${selectedTask.id}/`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          status: "archived",
+          archivedAt: updatedTask.archivedAt,
+        }),
+      });
 
-    setArchiveDialogOpen(false)
-  }, [selectedTask, addNotification])
+      const dataResponse = await response.json();
+
+      console.log(dataResponse);
+      
+      if (!response.ok || !dataResponse.success) {
+        throw new Error(dataResponse.message || "Erro ao arquivar tarefa.");
+      }
+
+      // Se a atualização for bem-sucedida, adicionar a notificação de sucesso
+      addNotification("Tarefa arquivada", `A tarefa "${selectedTask.title}" foi arquivada com sucesso.`);
+
+    } catch (error) {
+      console.error("Erro ao arquivar tarefa:", error);
+      // Caso algo dê errado, revertendo o estado local
+      setData((prevData) => ({
+        columns: prevData.columns.map((column) => ({
+          ...column,
+          tasks: column.tasks.map((task) =>
+            task.id === selectedTask.id ? { ...task, status: "completed" } : task
+          ),
+        })),
+      }));
+      addNotification("Erro ao arquivar tarefa", "Não foi possível arquivar a tarefa.");
+    }
+
+    // Fechar o diálogo de confirmação de arquivamento
+    setArchiveDialogOpen(false);
+  }, [selectedTask, addNotification, setData]);
+
 
   // Encontrar a tarefa pelo ID
   const findTaskById = useCallback(
@@ -747,150 +926,130 @@ export function KanbanBoard() {
     // para lidar com a detecção de coluna
   }, [])
 
+  // Tipagem das colunas
+  type Column = {
+    id: string;
+    title: string;
+    tasks: Task[];
+  };
+
   const handleDragEnd = useCallback(async (event: DragEndEvent) => {
-    const { active, over } = event
+    const { active, over } = event;
 
+    // Se a tarefa não foi solta em um drop zone válido
     if (!over) {
-      setActiveId(null)
-      setActiveTask(null)
-      return
+      setActiveId(null);
+      setActiveTask(null);
+      return;
     }
 
-    const activeId = active.id as string
-    const overId = over.id as string
+    const activeId = active.id as string;
+    const overId = over.id as string;
 
-    const { task: activeTask, column: activeColumn } = findTaskById(activeId)
+    // Verifique se data.columns está disponível
+    if (!data || !data.columns) {
+      console.error("Data ou data.columns não está definido", data);
+      return;
+    }
+
+    // Encontre a tarefa e a coluna onde ela estava
+    const { task: activeTask, column: activeColumn } = findTaskById(activeId);
     if (!activeTask || !activeColumn) {
-      setActiveId(null)
-      setActiveTask(null)
-      return
+      setActiveId(null);
+      setActiveTask(null);
+      return;
     }
 
-    const isOverColumn = data.columns.some((col) => col.id === overId)
+    // Verificar se a coluna de destino existe
+    const targetColumn = data.columns.find((col) => col.id === overId);
+    if (!targetColumn) return; // Caso a coluna de destino não exista
 
-    if (isOverColumn) {
-      if (activeColumn.id !== overId) {
-        const updatedTask: Task = {
-          ...activeTask,
-          status: overId as Task["status"],
-          completedAt: overId === "completed" && !activeTask.completedAt ? new Date().toISOString() : activeTask.completedAt,
+    // Se a tarefa foi movida para uma coluna diferente
+    if (activeColumn.id !== overId) {
+      // Crie a tarefa atualizada com o novo status e a nova coluna
+      const updatedTask: Task = {
+        ...activeTask,
+        status: overId as Task["status"],
+        completedAt: overId === "completed" && !activeTask.completedAt ? new Date().toISOString() : activeTask.completedAt,
+      };
+
+      // Atualize o estado visualmente
+      setData((prev) => {
+        const updatedColumns = prev.columns.map((column: Column) => {
+          if (column.id === activeColumn.id) {
+            return {
+              ...column,
+              tasks: column.tasks.filter((task) => task.id !== activeId), // Remove da coluna original
+            };
+          }
+          if (column.id === overId) {
+            return {
+              ...column,
+              tasks: [...column.tasks, updatedTask], // Adiciona à nova coluna
+            };
+          }
+          return column;
+        });
+
+        return { columns: updatedColumns };
+      });
+
+      // Enviar a requisição PATCH para atualizar a tarefa no backend
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) throw new Error("Token não encontrado");
+
+        const response = await fetch(`/api/tarefas/${activeTask.id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            status: overId,
+            completedAt: updatedTask.completedAt,
+          }),
+        });
+
+        const dataResponse = await response.json();
+
+        if (!response.ok || !dataResponse.success) {
+          throw new Error("Erro ao atualizar status da tarefa.");
         }
 
+        // Se a atualização for bem-sucedida, disparar notificação de sucesso
+        setTimeout(() => {
+          addNotification("Status de tarefa atualizado", `A tarefa "${activeTask.title}" foi movida para ${targetColumn.title} pelo usuário ${user?.name}.`);
+        }, 0);
+      } catch (err) {
+        console.error("Erro ao atualizar status da tarefa:", err);
+
+        // Reverter para a posição original caso falhe
         setData((prev) => {
-          const updatedColumns = prev.columns.map((column) => {
+          const updatedColumns = prev.columns.map((column: Column) => {
             if (column.id === activeColumn.id) {
               return {
                 ...column,
-                tasks: column.tasks.filter((task) => task.id !== activeId),
-              }
+                tasks: [...column.tasks, activeTask], // Retorna à coluna original
+              };
             }
             if (column.id === overId) {
               return {
                 ...column,
-                tasks: [...column.tasks, updatedTask],
-              }
+                tasks: column.tasks.filter((task) => task.id !== activeId), // Remove da coluna de destino
+              };
             }
-            return column
-          })
+            return column;
+          });
 
-          return { columns: updatedColumns }
-        })
+          return { columns: updatedColumns };
+        });
 
-        try {
-          const token = localStorage.getItem("token")
-          await fetch(`/api/tarefas/${activeTask.id}`, {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              status: overId,
-              completedAt: updatedTask.completedAt,
-            }),
-          })
-        } catch (err) {
-          console.error("Erro ao atualizar status da tarefa:", err)
-        }
-
-        const targetColumn = data.columns.find((col) => col.id === overId)
-        if (targetColumn) {
-          setTimeout(() => {
-            if (!isMountedRef.current) return
-            addNotification("Status de tarefa atualizado", `A tarefa "${activeTask.title}" foi movida para ${targetColumn.title}.`)
-          }, 0)
-        }
-      }
-    } else {
-      const { task: overTask, column: overColumn } = findTaskById(overId)
-
-      if (overTask && overColumn) {
-        if (activeColumn.id === overColumn.id) {
-          // Reordenar dentro da mesma coluna
-          setData((prev) => {
-            const updatedColumns = prev.columns.map((col) => {
-              if (col.id !== activeColumn.id) return col
-
-              const oldIndex = col.tasks.findIndex((task) => task.id === activeId)
-              const newIndex = col.tasks.findIndex((task) => task.id === overId)
-              if (oldIndex === -1 || newIndex === -1) return col
-
-              const reordered = arrayMove(col.tasks, oldIndex, newIndex)
-              return { ...col, tasks: reordered }
-            })
-
-            return { columns: updatedColumns }
-          })
-        } else {
-          // Mover entre colunas e inserir em posição específica
-          const updatedTask: Task = {
-            ...activeTask,
-            status: overColumn.id as Task["status"],
-            completedAt: overColumn.id === "completed" && !activeTask.completedAt
-              ? new Date().toISOString()
-              : activeTask.completedAt,
-          }
-
-          setData((prev) => {
-            const updatedColumns = prev.columns.map((col) => {
-              if (col.id === activeColumn.id) {
-                return {
-                  ...col,
-                  tasks: col.tasks.filter((task) => task.id !== activeId),
-                }
-              }
-
-              if (col.id === overColumn.id) {
-                const insertAt = col.tasks.findIndex((task) => task.id === overId)
-                const updatedTasks = [...col.tasks]
-                updatedTasks.splice(insertAt, 0, updatedTask)
-                return {
-                  ...col,
-                  tasks: updatedTasks,
-                }
-              }
-
-              return col
-            })
-
-            return { columns: updatedColumns }
-          })
-
-          setTimeout(() => {
-            if (!isMountedRef.current) return
-            addNotification(
-              "Status de tarefa atualizado",
-              `A tarefa "${activeTask.title}" para o cliente ${activeTask.client} foi movida para ${overColumn.title}.`
-            )
-          }, 0)
-        }
+        // Disparar notificação de erro
+        addNotification("Erro ao atualizar tarefa!", `O usuário ${user?.name} não possui permissão para atualizar a tarefa.`);
       }
     }
-
-    setActiveId(null)
-    setActiveTask(null)
-  }, [data.columns, findTaskById, addNotification])
-
+  }, [data.columns, findTaskById, addNotification, user]);
 
   return (
     <>
@@ -902,7 +1061,6 @@ export function KanbanBoard() {
           availableUsers={users}
           availableEntities={entities}
         />
-
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
@@ -916,6 +1074,8 @@ export function KanbanBoard() {
               onOpenEditDialog={handleOpenEditDialog}
               onOpenDeleteDialog={handleOpenDeleteDialog}
               onOpenArchiveDialog={handleOpenArchiveDialog}
+              onUploadAttachment={handleOpenAttachmentDialog}
+              onViewAttachments={handleOpenAttachmentViewDialog} // ✅ aqui
             />
           ))}
         </div>
@@ -954,6 +1114,24 @@ export function KanbanBoard() {
           onAddComment={handleAddComment}
         />
       )}
+
+      {/* Diálogo de anexo */}
+      {taskToAttach && (
+        <AttachmentDialog
+          open={attachmentDialogOpen}
+          onOpenChange={setAttachmentDialogOpen}
+          onUpload={handleUploadAttachment}
+        />
+      )}
+
+      {taskToViewAttachments && (
+        <AttachmentViewDialog
+          open={attachmentViewDialogOpen}
+          onOpenChange={setAttachmentViewDialogOpen}
+          task={taskToViewAttachments}
+        />
+      )}
+
 
       {/* Diálogo de edição */}
       {selectedTask && (
