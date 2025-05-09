@@ -69,7 +69,7 @@ export function TaskListView() {
 
   const [availableProjects, setAvailableProjects] = useState<{ id: string; name: string }[]>([])
   const [availableClients, setAvailableClients] = useState<{ id: string; name: string }[]>([])
-  const [availableUsers, setAvailableUsers] = useState<{ id: string; name: string }[]>([])
+  const [availableUsers, setAvailableUsers] = useState<{ id: string; full_name: string }[]>([])
   const [availableEntities, setAvailableEntities] = useState<{ id: string; name: string }[]>([])
 
   useEffect(() => {
@@ -146,28 +146,42 @@ export function TaskListView() {
 
 
   useEffect(() => {
+    // Filtro de tarefas sempre que filters ou tasks forem atualizados
     if (!filters || Object.keys(filters).length === 0) {
-      setFilteredTasks(tasks)
-      return
+      setFilteredTasks(tasks);
+      return;
     }
 
-    const searchTerm = filters.search?.toLowerCase() || ""
-
     const filtered = tasks.filter((task) => {
-      const assigneeName = task.assignee?.full_name?.toLowerCase() ?? ""
-      return (
+      const searchTerm = filters.search?.toLowerCase() || "";
+      const assigneeName = task.assignee?.full_name?.toLowerCase() || "";
+
+      const matchesSearch =
         task.title.toLowerCase().includes(searchTerm) ||
         task.description.toLowerCase().includes(searchTerm) ||
         task.client.toLowerCase().includes(searchTerm) ||
         assigneeName.includes(searchTerm) ||
         task.entity.toLowerCase().includes(searchTerm) ||
         (task.project && task.project.toLowerCase().includes(searchTerm)) ||
-        task.tags.some((tag) => tag.name.toLowerCase().includes(searchTerm))
-      )
-    })
+        task.tags.some((tag) => tag.name.toLowerCase().includes(searchTerm));
 
-    setFilteredTasks(filtered)
-  }, [filters, tasks])
+      if (!matchesSearch) return false;
+
+      // Filtros adicionais
+      if (filters.clients?.length > 0 && !filters.clients.includes(task.client)) return false;
+      if (filters.users?.length > 0) {
+        const assigneeId = typeof task.assignee === "object" && task.assignee ? task.assignee.id : task.assignee;
+        if (!filters.users.includes(assigneeId)) return false;
+      }
+      if (filters.entities?.length > 0 && !filters.entities.includes(task.entity)) return false;
+      if (filters.taskTypes?.length > 0 && !filters.taskTypes.includes(task.taskType)) return false;
+      if (filters.projects?.length > 0 && filters.projects.includes(task.project || "")) return false;
+
+      return true;
+    });
+
+    setFilteredTasks(filtered);
+  }, [filters, tasks]);
 
   const handleFilterChange = (newFilters: any) => {
     setFilters(newFilters)
