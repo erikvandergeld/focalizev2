@@ -37,7 +37,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!user?.id) return
   
-    const fetchNotifications = async () => {
+    const fetchNotifications :any  = async () => {
       try {
         const token = localStorage.getItem("token")
         const response = await fetch("/api/notificacoes", {
@@ -61,7 +61,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       }
     }
   
+    // Chama a função uma vez quando o componente é montado
     fetchNotifications()
+  
+    // Cria um intervalo para chamar a função a cada 5 minutos (300000 ms)
+    const intervalId = setInterval(fetchNotifications, 300000)  // 5 minutos
+  
+    // Limpa o intervalo quando o componente for desmontado
+    return () => clearInterval(intervalId)
+  
   }, [user?.id]) // ✅ escuta mudanças de usuário
   
 
