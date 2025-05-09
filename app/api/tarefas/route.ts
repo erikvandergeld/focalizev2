@@ -12,6 +12,19 @@ async function safeQuery(query: string, values: any[] = []): Promise<any> {
   }
 }
 
+function formatToMySQLDateTime(date: string): string {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0'); // Mês (01-12)
+  const day = String(d.getDate()).padStart(2, '0'); // Dia (01-31)
+  const hours = String(d.getHours()).padStart(2, '0'); // Hora (00-23)
+  const minutes = String(d.getMinutes()).padStart(2, '0'); // Minutos (00-59)
+  const seconds = String(d.getSeconds()).padStart(2, '0'); // Segundos (00-59)
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+
 // Função para verificar se o usuário pode editar a tarefa (somente quem a criou pode alterar o status)
 const canEditTask = (decoded: any, taskCreatorId: string) => {
   return decoded.id === taskCreatorId;
@@ -110,7 +123,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   }
 }
 
-// Função GET para buscar tarefas (filtrando pela entidade do usuário)
 export async function GET(req: NextRequest) {
   let decoded: any;
   try {
@@ -130,8 +142,8 @@ export async function GET(req: NextRequest) {
         t.description,
         c.name AS client,
         JSON_OBJECT('id', u.id, 'full_name', CONCAT(u.firstName, ' ', u.lastName)) AS assignee,
-        e.id AS entity_id,  -- Alterado para pegar o ID da entidade
-        e.name AS entity_name, -- Opcional, para mostrar o nome da entidade
+        e.id AS entity_id,
+        e.name AS entity_name,
         p.name AS project,
         t.taskType,
         t.status,
@@ -151,13 +163,76 @@ export async function GET(req: NextRequest) {
       userEntities.includes(task.entity_id)  // Comparar com o ID da entidade
     );
 
+    // Verificar se existem tarefas antes de consultar as tags
+    if (filteredTasks.length === 0) {
+      return NextResponse.json({ success: false, message: "Nenhuma tarefa encontrada." }, { status: 404 });
+    }
+
+    const alreadyArchivedTaskIds = new Set<string>();  // Para armazenar os IDs das tarefas arquivadas
+
+    // Atualizar tarefas com status "completed" e verificando o tempo desde a conclusão
+    const now = new Date(); // Obtém a data e hora atuais em UTC
+    const updatedTasks = filteredTasks.map((task: any) => {
+      // Ignora as tarefas que já estão arquivadas
+      if (task.status === "archived") {
+        console.log(`Tarefa task-${task.id} já está arquivada, ignorando.`);
+        alreadyArchivedTaskIds.add(task.id);  // Adiciona o ID ao conjunto de tarefas arquivadas
+        return task; // Retorna a tarefa sem alterações se já estiver arquivada
+      }
+
+      if (task.status === "completed" && task.completedAt) {
+        // Converte a data "completedAt" para o formato Date (ISO 8601)
+        let completedDate = new Date(task.completedAt);  // A data de conclusão já está no formato ISO
+        completedDate.setHours(completedDate.getHours() - 3);  // Subtrai 3 horas (ajustando o fuso horário)
+
+        const secondsSinceCompletion = (now.getTime() - completedDate.getTime()) / 1000; // Tempo em segundos
+
+        // Debug: Verificar os valores das datas
+        // console.log(`tarefas/route.ts  Tarefa ${task.id} completada em: ${completedDate.toISOString()}`);
+        // console.log(`tarefas/route.ts  Segundos desde a conclusão: ${secondsSinceCompletion}`);
+
+        // Se a tarefa foi concluída há mais de 48 horas (172,800 segundos), alteramos o status para "archived"
+        if (secondsSinceCompletion >= 172800 && !task.archivedAt) { // 48 horas em segundos
+          task.status = "archived";  // Altera o status para "archived"
+          task.archivedAt = formatToMySQLDateTime(now.toISOString());  // Converte a data para o formato correto
+          // console.log(`tarefas/route.ts  Tarefa ${task.id} foi arquivada devido ao tempo de conclusão.`);
+        }
+      }
+      return task;
+    });
+
+    // Atualizar o banco de dados para refletir as alterações no status
+    const updatedArchivedTasks = updatedTasks.filter((task: any) => task.status === "archived" && task.archivedAt);
+    
+    // Evitar que repasse as tarefas já arquivadas
+    for (const task of updatedArchivedTasks) {
+      if (alreadyArchivedTaskIds.has(task.id)) {
+        // console.log(`tarefas/route.ts Tarefa task-${task.id} já foi arquivada, ignorando a atualização.`);
+        continue;  // Se a tarefa já foi arquivada, ignora a atualização
+      }
+
+      try {
+        // Atualiza o status da tarefa para "archived" no banco de dados
+        await db.execute(
+          `UPDATE tasks SET status = ?, archivedAt = ? WHERE id = ?`,
+          [task.status, task.archivedAt, task.id]
+        );
+        // console.log(`Tarefa ${task.id} foi arquivada no banco.`);
+      } catch (error) {
+        console.error(`Erro ao atualizar a tarefa ${task.id} para arquivada:`, error);
+      }
+    }
+
+    // console.log(`Tarefas atualizadas: ${updatedArchivedTasks.length} tarefas foram arquivadas`);
+
+    const taskIds = updatedTasks.map((task: any) => task.id);
+
     // Consultar as tags associadas às tarefas filtradas
     const [tags]: any = await safeQuery(`
       SELECT tt.taskId, tg.id, tg.name, tg.color
       FROM task_tags tt
       JOIN tags tg ON tt.tagId = tg.id
-      WHERE tt.taskId IN (?)
-    `, [filteredTasks.map((task: any) => task.id)]);
+      WHERE tt.taskId IN (?)`, [taskIds]);
 
     // Agrupar tags por tarefa
     const tagsMap: Record<string, any[]> = {};
@@ -177,9 +252,8 @@ export async function GET(req: NextRequest) {
         c.created_at AS commentCreatedAt,
         c.task_id
       FROM comments c
-      WHERE c.task_id IN (?)
-      ORDER BY c.created_at DESC
-    `, [filteredTasks.map((task: any) => task.id)]);
+      WHERE c.task_id IN (?) 
+      ORDER BY c.created_at DESC`, [updatedTasks.map((task: any) => task.id)]);
 
     // Agrupar os comentários por tarefa
     const commentsMap: Record<string, any[]> = {};
@@ -200,8 +274,7 @@ export async function GET(req: NextRequest) {
       SELECT 
         a.id, a.task_id, a.file_name AS name, a.file_url AS url
       FROM anexos a
-      WHERE a.task_id IN (?)
-    `, [filteredTasks.map((task: any) => task.id)]);
+      WHERE a.task_id IN (?)`, [updatedTasks.map((task: any) => task.id)]);
 
     // Agrupar anexos por tarefa
     const attachmentsMap: Record<string, any[]> = {};
@@ -216,14 +289,14 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const tasksWithTagsCommentsAndAttachments = filteredTasks.map((task: any) => ({
+    const tasksWithTagsCommentsAndAttachments = updatedTasks.map((task: any) => ({
       ...task,
       tags: tagsMap[task.id] || [],
       comments: commentsMap[task.id] || [],
-      attachments: attachmentsMap[task.id] || [] // ⬅️ Adiciona aqui!
+      attachments: attachmentsMap[task.id] || []
     }));
 
-    // Retornar a resposta com as tarefas, tags e comentários
+    // Retornar a resposta com as tarefas, tags, comentários e anexos
     return NextResponse.json({ success: true, tasks: tasksWithTagsCommentsAndAttachments });
   } catch (error) {
     console.error("Erro ao buscar tarefas:", error);
