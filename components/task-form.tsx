@@ -95,15 +95,62 @@ export function TaskForm() {
     )
   }
 
-  const handleCreateProject = () => {
-    if (newProjectName.trim() && entity) {
-      const newProjectId = `project-${Date.now()}`
-      setProject(newProjectId)
-      toast({ title: "Projeto criado", description: `O projeto "${newProjectName}" foi criado.` })
-      setNewProjectName("")
-      setNewProjectDialogOpen(false)
-    }
-  }
+   const handleCreateProject = async () => {
+    try {
+      const clientName = availableClients.find((c) => c.id === client)?.name || "Cliente"
+      const entityName = availableEntities.find((e) => e.id === entity)?.name || "Entidade"
+
+      const token = localStorage.getItem("token")
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      }
+        // Se não existe projectId, significa que é uma criação (POST)
+        const response = await fetch("/api/projetos", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            name,
+            description,
+            client,
+            entity,
+            status,
+          }),
+        })
+
+        console.log("Response:", response)
+
+        const data = await response.json()
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || "Erro ao criar projeto.")
+        }
+
+        toast({
+          title: "Projeto criado com sucesso",
+          description: "O projeto foi adicionado ao sistema.",
+        })
+
+        addNotification(
+          "Novo projeto criado",
+          `O projeto "${name}" foi criado com sucesso pelo usuário ${user?.name}`
+        )
+
+        // Redireciona para a página de lista de projetos
+        router.push("/dashboard/projects")
+      }
+      catch (error) {
+        console.error("Erro ao criar projeto:", error)
+        toast({
+          title: "Erro ao criar projeto",
+          description: "Não foi possível criar o projeto.",
+          variant: "destructive",
+        })
+      } finally {
+        setNewProjectDialogOpen(false)
+        setNewProjectName("")
+      }
+    } 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -200,7 +247,9 @@ export function TaskForm() {
         </div>
 
       
-        <div className="grid gap-2">
+        {/* Campo de projetos não será exibido por enquanto, pois a criação de um projeto é muito mais complexa e o dialog disponibilizado é simples demais(não inclui os campos necessários, é necessário a implementação completa) não é o foco do MVP. */}
+
+        {/* <div className="grid gap-2">
           <div className="flex justify-between items-center">
             <Label>Projeto</Label>
             <Dialog open={newProjectDialogOpen} onOpenChange={setNewProjectDialogOpen}>
@@ -228,7 +277,7 @@ export function TaskForm() {
               {filteredProjects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
             </SelectContent>
           </Select>
-        </div>
+        </div> */}
 
         <div className="grid gap-2">
           <Label>Status</Label>
