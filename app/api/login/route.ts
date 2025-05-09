@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
         entities: user.entities || [],  // Inclui as entidades do usuário no token
       },
       process.env.JWT_SECRET!,
-      { expiresIn: "1h" }
+      { expiresIn: "8h" }
     )
 
     return NextResponse.json({

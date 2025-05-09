@@ -10,6 +10,7 @@ import { AttachmentViewDialog } from "@/components/attachment-view-dialog"
 
 
 
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -95,28 +96,29 @@ const getContrastColor = (hexColor: string) => {
 }
 
 
-
-
-
-// Componente de tarefa arrastável
 function SortableTaskCard({
   task,
   onOpenCommentDialog,
   onOpenEditDialog,
   onOpenDeleteDialog,
   onOpenArchiveDialog,
-  onUploadAttachment, // 👈 Adicionado
-  onViewAttachments, // ✅ aqui  
+  onUploadAttachment,
+  onViewAttachments,
 }: {
   task: Task
   onOpenCommentDialog: (task: Task) => void
   onOpenEditDialog: (task: Task) => void
   onOpenDeleteDialog: (task: Task) => void
   onOpenArchiveDialog: (task: Task) => void
-  onUploadAttachment: (task: Task) => void // 👈 Adicionado
-  onViewAttachments: (task: Task) => void // ✅ aqui
+  onUploadAttachment: (task: Task) => void
+  onViewAttachments: (task: Task) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: task.id,
+    data: { type: "task", task },
+  })
+
+  const { setNodeRef: droppableRef, isOver: isTaskOver } = useDroppable({
     id: task.id,
     data: { type: "task", task },
   })
@@ -286,7 +288,7 @@ function DroppableColumn({
   onOpenDeleteDialog,
   onOpenArchiveDialog,
   onUploadAttachment,
-  onViewAttachments, // ✅ aqui
+  onViewAttachments,
 }: {
   column: Column
   tasks: Task[]
@@ -295,27 +297,26 @@ function DroppableColumn({
   onOpenDeleteDialog: (task: Task) => void
   onOpenArchiveDialog: (task: Task) => void
   onUploadAttachment: (task: Task) => void
-  onViewAttachments: (task: Task) => void // ✅ aqui
+  onViewAttachments: (task: Task) => void
 }) {
-  // Usar o hook useDroppable para tornar a coluna uma área de soltar
+  // Usar o useDroppable para definir a área de drop
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
-    data: {
-      type: "column",
-      column,
-    },
-  })
-
+    data: { type: "column", column },
+  });
 
   return (
     <div
-      ref={setNodeRef} // Aplique o ref diretamente na coluna inteira para garantir que a área de soltura seja maior
-      className={`flex flex-col w-full bg-transparent ${isOver ? "bg-accent/50" : ""}`}
+      ref={setNodeRef}
+      className={`flex flex-col w-full bg-transparent`}
       style={{
-        minHeight: "300px", // Garante que a área de soltura seja maior
-        flexGrow: 1, // Expande para ocupar todo o espaço disponível
-        cursor: isOver ? "copy" : "move", // Altera o cursor quando o item está sobre a coluna
-        padding: "1rem", // Aumenta o espaço ao redor das tarefas
+        minHeight: "300px", // Garante que a área de drop tenha altura mínima
+        flexGrow: 1,        // Faz com que a coluna ocupe o máximo possível de espaço
+        cursor: isOver ? "copy" : "move", // Alterar o cursor para indicar que pode soltar
+        padding: "1rem",    // Adiciona padding ao redor da área
+        transition: "background-color 0.3s ease, border 0.3s ease", // Transição suave de fundo e borda
+        borderRadius: "0.5rem", // Bordas arredondadas
+        backgroundColor: isOver ? "#b0d0ff" : "transparent", // Azul suave
       }}
     >
       <Card className="h-full w-full">
@@ -326,7 +327,6 @@ function DroppableColumn({
           </CardTitle>
         </CardHeader>
         <CardContent className="flex-1">
-          {/* Tarefas são mapeadas para a zona de soltura */}
           <div className="kanban-column space-y-3">
             <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
               {tasks.map((task) => (
@@ -338,7 +338,7 @@ function DroppableColumn({
                   onOpenDeleteDialog={onOpenDeleteDialog}
                   onOpenArchiveDialog={onOpenArchiveDialog}
                   onUploadAttachment={onUploadAttachment}
-                  onViewAttachments={onViewAttachments} // ✅ aqui
+                  onViewAttachments={onViewAttachments}
                 />
               ))}
             </SortableContext>
@@ -349,7 +349,7 @@ function DroppableColumn({
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
 
 export function KanbanBoard() {
@@ -441,7 +441,11 @@ export function KanbanBoard() {
       }
     }
 
-    fetchData()
+    fetchData() // Monta o componente e busca os dados
+    const updateTarefas = setInterval(fetchData, 300000) // Atualiza os dados a cada hora
+
+    return () => clearInterval(updateTarefas) // Limpa o intervalo quando o componente for desmontado
+
   }, [addNotification])
 
 
@@ -465,165 +469,177 @@ export function KanbanBoard() {
     }),
   )
 
-  const applyFilters = useCallback(
-    (task: Task) => {
-      if (!filters || Object.keys(filters).length === 0) {
-        return true
-      }
+  // Função para aplicar filtros nas tarefas
+  const applyFilters = useCallback((columns: Column[]) => {
+    return columns.map((column) => ({
+      ...column,
+      tasks: column.tasks.filter((task) => {
+        // 🔍 Filtro de busca (por título e descrição)
+        if (filters.search && !task.title.toLowerCase().includes(filters.search.toLowerCase()) && !task.description.toLowerCase().includes(filters.search.toLowerCase())) {
+          return false;
+        }
 
-      const assigneeName =
-        typeof task.assignee === "string"
-          ? task.assignee
-          : task.assignee?.full_name || ""
+        // 👥 Filtro por clientes
+        if (filters.clients.length > 0 && !filters.clients.includes(task.client)) {
+          return false;
+        }
 
+        // 👤 Filtro por responsáveis
+        if (filters.users.length > 0) {
+          const assigneeId = typeof task.assignee === "object" && task.assignee ? task.assignee.id : task.assignee;
+          if (!filters.users.includes(assigneeId)) return false;
+        }
 
+        // 🏢 Filtro por entidades
+        if (filters.entities.length > 0 && !filters.entities.includes(task.entity)) {
+          return false;
+        }
 
-      const assigneeId =
-        typeof task.assignee === "object" && task.assignee?.id
-          ? task.assignee.id
-          : typeof task.assignee === "string"
-            ? task.assignee
-            : ""
+        // 🔧 Filtro por tipo de tarefa
+        if (filters.taskTypes.length > 0 && !filters.taskTypes.includes(task.taskType)) {
+          return false;
+        }
 
-      const projectName = typeof task.project === "string" ? task.project : ""
+        // 📁 Filtro por projeto
+        if (filters.projects.length > 0 && !filters.projects.includes(task.project)) {
+          return false;
+        }
 
-      // 🔍 Filtro por busca textual
-      if (filters.search && filters.search.trim() !== "") {
-        const searchTerm = filters.search.toLowerCase()
-        const matchesSearch =
-          task.title.toLowerCase().includes(searchTerm) ||
-          task.description.toLowerCase().includes(searchTerm) ||
-          task.client.toLowerCase().includes(searchTerm) ||
-          assigneeName.toLowerCase().includes(searchTerm) ||
-          task.entity.toLowerCase().includes(searchTerm) ||
-          projectName.toLowerCase().includes(searchTerm) ||
-          task.tags.some((tag) => tag.name.toLowerCase().includes(searchTerm))
+        return true;
+      }),
+    }));
+  }, [filters]);
 
-        if (!matchesSearch) return false
-      }
-
-      // 👥 Filtro por clientes
-      if (filters.clients?.length) {
-        const clientNames = filters.clients.map((id: string) => {
-          const client = clients.find((c) => c.id === id)
-          return client?.name || ""
-        })
-        if (!clientNames.includes(task.client)) return false
-      }
-
-      // 👤 Filtro por responsáveis
-      if (filters.users?.length) {
-        if (!filters.users.includes(assigneeId)) return false
-      }
-
-      // 🏢 Filtro por entidades
-      if (filters.entities?.length) {
-        const entityNames = filters.entities.map((id: string) => {
-          const entity = entities.find((e) => e.id === id)
-          return entity?.name || ""
-        })
-        if (!entityNames.includes(task.entity)) return false
-      }
-
-      // 🔧 Filtro por tipo de tarefa
-      if (filters.taskTypes?.length) {
-        const isAdministrative = filters.taskTypes.includes("administrative")
-        const isTechnical = filters.taskTypes.includes("technical")
-
-        if (isAdministrative && !isTechnical && task.taskType !== "administrative") return false
-        if (!isAdministrative && isTechnical && task.taskType !== "technical") return false
-      }
-
-      // 📁 Filtro por projeto
-      if (filters.projects?.length) {
-        const projectNames = filters.projects.map((id: string) => {
-          const project = projects.find((p) => p.id === id)
-          return project?.name || ""
-        })
-        if (!projectName || !projectNames.includes(projectName)) return false
-      }
-
-      // 🏷️ Filtro por tags
-      if (filters.tags?.length) {
-        const hasMatchingTag = task.tags.some((tag) => filters.tags.includes(tag.id))
-        if (!hasMatchingTag) return false
-      }
-
-      return true
-    },
-    [filters, clients, users, entities, projects]
-  )
-
-  // Filtrar dados com base nos filtros
+  // UseMemo para otimizar a filtragem das tarefas com base nos filtros
   const filteredData = useMemo(() => {
     return {
-      columns: data.columns.map((column) => ({
-        ...column,
-        tasks: column.tasks.filter((task) => task.status !== "archived"), // Filtrando tarefas arquivadas
-      })),
+      columns: applyFilters(data.columns), // Aplicando filtros nas colunas
     };
-  }, [data]);
+  }, [data.columns, applyFilters]);
 
-  // Verificar tarefas que precisam ser arquivadas automaticamente (48 horas após conclusão)
-  useEffect(() => {
-    const checkTasksForAutoArchive = () => {
-      if (!isMountedRef.current) return
 
-      const now = new Date()
-      const tasksToArchive: { id: string; title: string }[] = []
-
-      setData((prevData) => {
-        const updatedColumns = prevData.columns.map((column) => {
-          if (column.id !== "completed") return column
-
-          const updatedTasks = column.tasks.filter((task) => {
-            if (!task.completedAt || task.archivedAt) return true
-
-            const completedDate = new Date(task.completedAt)
-            const hoursSinceCompletion = (now.getTime() - completedDate.getTime()) / (1000 * 60 * 60)
-
-            if (hoursSinceCompletion >= 48) {
-              // Adicionar à lista de tarefas para arquivar
-              tasksToArchive.push({ id: task.id, title: task.title })
-              return false
-            }
-
-            return true
-          })
-
-          return {
-            ...column,
-            tasks: updatedTasks,
-          }
-        })
-
-        return { columns: updatedColumns }
-      })
-
-      // Enviar notificações após a atualização do estado
-      if (tasksToArchive.length > 0 && isMountedRef.current) {
-        // Usar um timeout para garantir que as notificações sejam enviadas após a renderização
-        const timer = setTimeout(() => {
-          if (!isMountedRef.current) return
-
-          tasksToArchive.forEach((task) => {
-            addNotification(
-              "Tarefa arquivada automaticamente",
-              `A tarefa "${task.title}" foi arquivada automaticamente após 48 horas de conclusão.`,
-            )
-          })
-        }, 0)
-
-        return () => clearTimeout(timer)
+  const handleArchiveTask = useCallback(async (task: Task) => {
+    if (!task) return;
+  
+    const updatedTask: Task = {
+      ...task,
+      status: "archived",
+      archivedAt: new Date().toISOString(), // Registrando o momento do arquivamento
+    };
+  
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Token não encontrado");
+  
+      const response = await fetch(`/api/tarefas/${updatedTask.id}/`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(updatedTask), // Envia a tarefa com status "archived"
+      });
+  
+      const dataResponse = await response.json();
+  
+      if (!response.ok || !dataResponse.success) {
+        throw new Error(dataResponse.message || "Erro ao arquivar tarefa.");
       }
+  
+      addNotification("Tarefa arquivada", `A tarefa "${updatedTask.title}" foi arquivada com sucesso.`);
+    } catch (error) {
+      console.error("Erro ao arquivar tarefa:", error);
+      addNotification("Erro ao arquivar tarefa", "Não foi possível arquivar a tarefa.");
     }
+  }, [addNotification]);
+  
 
-    // Verificar ao carregar e a cada hora
-    checkTasksForAutoArchive()
-    const interval = setInterval(checkTasksForAutoArchive, 60 * 60 * 1000)
+  const archiveTasksAuto = useCallback(() => {
+    if (!isMountedRef.current) return;
 
-    return () => clearInterval(interval)
-  }, [addNotification])
+    const now = new Date();
+    const tasksToArchive: { id: string; title: string }[] = [];
+
+    setData((prevData) => {
+      const updatedColumns = prevData.columns.map((column) => {
+        if (column.id !== "completed") return column; // Só verificamos tarefas completadas
+
+        const updatedTasks = column.tasks.filter((task) => {
+          if (!task.completedAt || task.archivedAt) return true; // Se não estiver concluída ou já foi arquivada, mantém a tarefa
+
+          const completedDate = new Date(task.completedAt);
+          const secondsSinceCompletion = (now.getTime() - completedDate.getTime()) / 1000; // Tempo em segundos
+
+          if (secondsSinceCompletion >= 10) {
+            tasksToArchive.push({ id: task.id, title: task.title });
+
+            // Arquivar a tarefa
+            const updatedTask: Task = {
+              ...task,
+              status: "archived",
+              archivedAt: now.toISOString(), // Atualiza a data de arquivamento
+            };
+
+            // Atualizando o estado local com a tarefa arquivada
+            setData((prevData) => {
+              const updatedColumns = prevData.columns.map((col) => {
+                if (col.id === column.id) {
+                  return {
+                    ...col,
+                    tasks: col.tasks.map((t) =>
+                      t.id === task.id ? updatedTask : t
+                    ),
+                  };
+                }
+                return col;
+              });
+
+              return { columns: updatedColumns };
+            });
+
+            // Retorna false para remover a tarefa da lista de "completadas"
+            return false;
+          }
+
+          return true;
+        });
+
+        return {
+          ...column,
+          tasks: updatedTasks, // Atualiza a coluna com as tarefas filtradas
+        };
+      });
+
+      return { columns: updatedColumns };
+    });
+
+    // Enviar notificações após a atualização do estado local
+    if (tasksToArchive.length > 0 && isMountedRef.current) {
+      const timer = setTimeout(() => {
+        if (!isMountedRef.current) return;
+
+        tasksToArchive.forEach((task) => {
+          addNotification(
+            "Tarefa arquivada automaticamente",
+            `A tarefa "${task.title}" foi arquivada automaticamente após 10 segundos de conclusão.`
+          );
+        });
+      }, 0);
+
+      return () => clearTimeout(timer);
+    }
+  }, [addNotification]);
+
+
+  useEffect(() => {
+    // Chama a função de arquivamento a cada 10 segundos (apenas para fins de teste)
+    const intervalId = setInterval(() => {
+      archiveTasksAuto();
+    }, 10000); // 10000 ms = 10 segundos
+  
+    return () => clearInterval(intervalId); // Limpa o intervalo ao desmontar o componente
+  }, [archiveTasksAuto]); // A função archiveTasksAuto é chamada a cada 10 segundos
+  
 
   // Função para lidar com mudanças nos filtros
   const handleFilterChange = useCallback((newFilters: any) => {
@@ -829,74 +845,6 @@ export function KanbanBoard() {
     setDeleteDialogOpen(false)
   }, [selectedTask, addNotification])
 
-  const handleArchiveTask = useCallback(async () => {
-    if (!selectedTask) return;
-
-    // Atualizando o status da tarefa para "archived" e registrando a data de arquivamento
-    const updatedTask: Task = {
-      ...selectedTask,
-      status: "archived",
-      archivedAt: new Date().toISOString(), // Registrando o momento do arquivamento
-    };
-
-    // Atualizando o estado local com a tarefa arquivada
-    setData((prevData) => ({
-      columns: prevData.columns.map((column) => ({
-        ...column,
-        tasks: column.tasks.map((task) =>
-          task.id === selectedTask.id ? updatedTask : task
-        ),
-      })),
-    }));
-
-    // Enviar a atualização para o backend
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("Token não encontrado");
-      }
-
-      const response = await fetch(`/api/tarefas/${selectedTask.id}/`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          status: "archived",
-          archivedAt: updatedTask.archivedAt,
-        }),
-      });
-
-      const dataResponse = await response.json();
-
-      console.log(dataResponse);
-      
-      if (!response.ok || !dataResponse.success) {
-        throw new Error(dataResponse.message || "Erro ao arquivar tarefa.");
-      }
-
-      // Se a atualização for bem-sucedida, adicionar a notificação de sucesso
-      addNotification("Tarefa arquivada", `A tarefa "${selectedTask.title}" foi arquivada com sucesso.`);
-
-    } catch (error) {
-      console.error("Erro ao arquivar tarefa:", error);
-      // Caso algo dê errado, revertendo o estado local
-      setData((prevData) => ({
-        columns: prevData.columns.map((column) => ({
-          ...column,
-          tasks: column.tasks.map((task) =>
-            task.id === selectedTask.id ? { ...task, status: "completed" } : task
-          ),
-        })),
-      }));
-      addNotification("Erro ao arquivar tarefa", "Não foi possível arquivar a tarefa.");
-    }
-
-    // Fechar o diálogo de confirmação de arquivamento
-    setArchiveDialogOpen(false);
-  }, [selectedTask, addNotification, setData]);
-
 
   // Encontrar a tarefa pelo ID
   const findTaskById = useCallback(
@@ -966,7 +914,6 @@ export function KanbanBoard() {
 
     // Se a tarefa foi movida para uma coluna diferente
     if (activeColumn.id !== overId) {
-      // Crie a tarefa atualizada com o novo status e a nova coluna
       const updatedTask: Task = {
         ...activeTask,
         status: overId as Task["status"],
@@ -1166,7 +1113,7 @@ export function KanbanBoard() {
         onOpenChange={setArchiveDialogOpen}
         title="Arquivar tarefa"
         description="Tem certeza que deseja arquivar esta tarefa? Ela será movida para a seção de tarefas arquivadas e não poderá mais ser editada."
-        onConfirm={handleArchiveTask}
+        onConfirm={() => selectedTask && handleArchiveTask(selectedTask)}  // Verifica se selectedTask não é null
         confirmText="Sim, arquivar"
         cancelText="Cancelar"
       />

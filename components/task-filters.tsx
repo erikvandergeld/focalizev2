@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -14,15 +14,13 @@ import {
 import { Filter, Search, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
-// Tipo para as props
 interface TaskFiltersProps {
   onFilterChange: (filters: any) => void
   availableProjects: { id: string; name: string }[]
   availableClients: { id: string; name: string }[]
-  availableUsers: { id: string; full_name: string }[] // Usando full_name em vez de firstName e lastName
+  availableUsers: { id: string; full_name: string }[]
   availableEntities: { id: string; name: string }[]
 }
-
 
 export function TaskFilters({
   onFilterChange,
@@ -51,19 +49,6 @@ export function TaskFilters({
     projects: [],
   })
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (onFilterChange) {
-        const filters = {
-          search,
-          ...activeFilters,
-        }
-        onFilterChange(filters)
-      }
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [search, activeFilters, onFilterChange])
-
   // Função de toggle para adicionar ou remover filtros
   const toggleFilter = useCallback((category: keyof typeof activeFilters, id: string) => {
     setActiveFilters((prev) => {
@@ -79,6 +64,7 @@ export function TaskFilters({
     })
   }, [])
 
+  // Limpar filtros
   const clearFilters = useCallback(() => {
     setActiveFilters({
       clients: [],
@@ -90,8 +76,18 @@ export function TaskFilters({
     setSearch("")
   }, [])
 
-  const totalActiveFilters = Object.values(activeFilters).reduce((sum, filters) => sum + filters.length, 0)
+  // Atualizando os filtros sempre que o estado de search ou filtros for alterado
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onFilterChange({
+        search,
+        ...activeFilters,
+      })
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search, activeFilters, onFilterChange])
 
+  const totalActiveFilters = Object.values(activeFilters).reduce((sum, filters) => sum + filters.length, 0)
 
   return (
     <div className="flex flex-col w-full max-w-full">
@@ -211,7 +207,7 @@ export function TaskFilters({
                   checked={activeFilters.users.includes(user.id)}
                   onCheckedChange={() => toggleFilter("users", user.id)}
                 >
-                  {user.full_name} {/* Exibe o nome completo */}
+                  {user.full_name}
                 </DropdownMenuCheckboxItem>
               ))
             )}
@@ -238,7 +234,6 @@ export function TaskFilters({
               </Badge>
             ) : null
           })}
-
           {activeFilters.taskTypes.map((id) => {
             const type = taskTypes.find((t) => t.id === id)
             return type ? (
@@ -255,7 +250,6 @@ export function TaskFilters({
               </Badge>
             ) : null
           })}
-
           {activeFilters.projects.map((id) => {
             const project = availableProjects.find((p) => p.id === id)
             return project ? (
@@ -272,7 +266,6 @@ export function TaskFilters({
               </Badge>
             ) : null
           })}
-
           {activeFilters.clients.map((id) => {
             const client = availableClients.find((c) => c.id === id)
             return client ? (
@@ -289,12 +282,11 @@ export function TaskFilters({
               </Badge>
             ) : null
           })}
-
           {activeFilters.users.map((id) => {
             const user = availableUsers.find((u) => u.id === id)
             return user ? (
               <Badge key={`user-${id}`} variant="outline" className="flex items-center gap-1">
-                {user.full_name} {/* Exibe o nome completo */}
+                {user.full_name}
                 <Button
                   variant="ghost"
                   size="sm"
