@@ -1,70 +1,47 @@
-"use client"
+import { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useNotifications } from "./notification-provider";
+import { toast } from "sonner";
+import { User } from "lucide-react";
+import { useAuth } from "./auth-provider";
 
-import { useState } from "react"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { formatDistanceToNow } from "date-fns"
-import { ptBR } from "date-fns/locale"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { useNotifications } from "./notification-provider"
-import { toast } from "sonner"
-import { User } from "lucide-react"
-import { useAuth } from "./auth-provider"
 
+// Regex para detectar menções no formato "@usuario"
+const mentionRegex = /@([a-zA-Z0-9_]+)/g;
+
+// types.ts
+
+export type UserType = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  entities: string[];
+  permissions: string[];
+  createdAt: string;
+};
 
 export type Comment = {
-  id: string
-  text: string
-  author: string
-  createdAt: Date
-}
-
-// const onAddComment = async (taskId: string, commentText: string) => {
-//   const token = localStorage.getItem("token");
-//   const headers = {
-//     "Content-Type": "application/json",
-//     Authorization: `Bearer ${token}`,
-//   };
-
-//   try {
-//     // Enviar o comentário para o backend
-//     const response = await fetch(`/api/tarefas/${taskId}/comentarios`, {
-//       method: "POST",
-//       headers,
-//       body: JSON.stringify({ text: commentText }),
-//     });
-
-//     const data = await response.json();
-
-//     if (!response.ok || !data.success) {
-//       throw new Error(data.message || "Erro ao adicionar comentário.");
-//     }
-
-//     return true;
-//   } catch (error) {
-//     console.error("Erro ao adicionar comentário:", error);
-//     throw error;
-//   }
-// };
-
+  id: string;
+  text: string;
+  author: string;
+  createdAt: Date;
+};
 
 interface CommentDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  taskId: string
-  taskTitle: string
-  client: string
-  comments: Comment[]
-  onAddComment: (taskId: string, comment: string) => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  taskId: string;
+  taskTitle: string;
+  client: string;
+  comments: Comment[];
+  onAddComment: (taskId: string, comment: string, mentions: string[]) => void;
 }
 
 export function CommentDialog({
@@ -77,38 +54,125 @@ export function CommentDialog({
   onAddComment,
 }: CommentDialogProps) {
   const [newComment, setNewComment] = useState("");
-  const { addNotification } = useNotifications()
-  const { user: $user } = useAuth()
+  const [mentions, setMentions] = useState<string[]>([]);
+  const [showMentionList, setShowMentionList] = useState(false);
+  const [users, setUsers] = useState<UserType[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<UserType[]>([]);
+  const { addNotification } = useNotifications();
+  const { user: $user } = useAuth();
 
-  const handleSubmit = async () => {
-    if (newComment.trim()) {
-      try {
-        // Enviar o comentário para o backend
-        await onAddComment(taskId, newComment); // Chama a função onAddComment, passando o novo comentário
-        
-        // Limpar o campo de texto após enviar
-        setNewComment("");
-
-        // Notificar o usuário
-        addNotification(
-          "Comentário adicionado",
-          `O usuário ${$user?.name} adicionou um comentário à tarefa "${taskTitle}" para o cliente ${client}.`
-        );
-
-        toast.success("Comentário adicionado com sucesso!");
-
-        // Atualizar a lista de comentários localmente
-        onOpenChange(true);  // Atualiza o estado e força a re-renderização do Dialog
-      } catch (error) {
-        console.error("Erro ao adicionar comentário:", error);
-        addNotification(`Erro ao adicionar comentário (${User.name})`, "Não foi possível adicionar o comentário.");
+  // Função para buscar usuários diretamente da API do Focalize
+  const fetchUsers = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        toast.error("Usuário não autenticado.");
+        return;
       }
+
+      const response = await fetch("/api/usuarios", {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setUsers(data.usuarios || []);
+      } else {
+        toast.error("Erro ao buscar usuários.");
+      }
+    } catch (error) {
+      console.error("Erro ao buscar usuários:", error);
+      toast.error("Erro ao se conectar com o servidor.");
     }
   };
-  
-  const formatDate = (date: Date) => {
-    return formatDistanceToNow(date, { addSuffix: true, locale: ptBR })
+
+  useEffect(() => {
+    if (open) {
+      fetchUsers();
+    }
+  }, [open]);
+
+  // Função para capturar menções no texto
+  const extractMentions = (text: string) => {
+    const matches = text.match(mentionRegex);
+    return matches ? matches.map((match) => match.substring(1)) : [];
+  };
+
+  // Função para lidar com a inserção de menção
+  const handleMentionSelect = (user: { id: string; firstName: string; lastName: string }) => {
+    const textArray = newComment.split(" ");
+    textArray.pop(); // Remove o texto parcial da menção
+    setNewComment(`${textArray.join(" ")} @${user.firstName} ${user.lastName} `);
+    setShowMentionList(false);
+    setFilteredUsers([]);
+  };
+
+  // Função para lidar com a mudança de texto e exibir a lista de menções
+  const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const text = e.target.value;
+    setNewComment(text);
+    const mentionsInText = extractMentions(text);
+    setMentions(mentionsInText);
+
+    const lastWord = text.split(" ").pop();
+    if (lastWord?.startsWith("@")) {
+      setShowMentionList(true);
+      const query = lastWord.substring(1).toLowerCase();
+      setFilteredUsers(
+        users.filter((user) =>
+          `${user.firstName} ${user.lastName}`.toLowerCase().includes(query)
+        )
+      );
+    } else {
+      setShowMentionList(false);
+      setFilteredUsers([]);
+    }
+  };
+
+// Atualizando a assinatura da função onAddComment
+const handleSubmit = async () => {
+  if (newComment.trim()) {
+    try {
+      const extractedMentions = extractMentions(newComment).map((mention) =>
+        mention.replace("@", "").trim()
+      );
+
+      const mentionedUserIds = users
+        .filter((user) =>
+          extractedMentions.some(
+            (mention) =>
+              mention.toLowerCase() === user.firstName.toLowerCase() ||
+              mention.toLowerCase() === `${user.firstName.toLowerCase()} ${user.lastName.toLowerCase()}`
+          )
+        )
+        .map((user) => user.id);
+
+      // Chama a função centralizada handleAddComment com os dados necessários
+      // A função onAddComment foi definida para receber 3 parâmetros
+      await onAddComment(taskId, newComment, mentionedUserIds);
+
+      setNewComment("");
+      setMentions([]);
+      addNotification(
+        "Comentário adicionado",
+        `Comentário adicionado à tarefa "${taskTitle}".`
+      );
+      toast.success("Comentário adicionado com sucesso!");
+      onOpenChange(true);
+    } catch (error) {
+      console.error("Erro ao adicionar comentário:", error);
+      addNotification("Erro ao adicionar comentário", "Não foi possível adicionar o comentário.");
+    }
   }
+};
+
+  const formatDate = (date: Date) => {
+    return formatDistanceToNow(date, { addSuffix: true, locale: ptBR });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
@@ -126,40 +190,47 @@ export function CommentDialog({
                 Nenhum comentário ainda. Seja o primeiro a comentar!
               </p>
             ) : (
-              <div className="space-y-4">
-                {comments.map((comment) => (
-                  <div key={comment.id} className="flex gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="text-xs">
-                        {comment.author
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium">{comment.author}</p>
-                        <span className="text-xs text-muted-foreground">
-                          {formatDate(comment.createdAt)}
-                        </span>
-                      </div>
-                      <p className="text-sm">{comment.text}</p>
-                    </div>
+              comments.map((comment) => (
+                <div key={comment.id} className="flex gap-3">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="text-xs">
+                      {comment.author[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 space-y-1">
+                    <p className="text-sm font-medium">{comment.author}</p>
+                    <p className="text-sm">{comment.text}</p>
+                    <span className="text-xs text-muted-foreground">
+                      {formatDate(comment.createdAt)}
+                    </span>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))
             )}
           </ScrollArea>
         </div>
 
-        <div className="space-y-2">
+        <div className="relative space-y-2">
           <Textarea
             placeholder="Adicione um comentário..."
             value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
+            onChange={handleCommentChange}
             className="min-h-[80px]"
           />
+
+          {showMentionList && (
+            <div className="absolute bg-[#161B22] border border-gray-600 rounded-md shadow-md max-h-40 overflow-y-auto z-10 w-full mt-1">
+              {filteredUsers.map((user) => (
+                <div
+                  key={user.id}
+                  className="flex items-center px-3 py-2 cursor-pointer hover:bg-[#0D1117] transition text-white"
+                  onClick={() => handleMentionSelect(user)}
+                >
+                  <span className="font-medium">{user.firstName} {user.lastName}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <DialogFooter>

@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: "Permissão negada." }, { status: 403 })  // Permissão negada
     }
 
-    const { name, description, client, entity, status } = await req.json()
+    const { name, description, client, entity, status, initDate, completeDate, membersTeam } = await req.json()
 
     // Verificar se todos os dados obrigatórios foram enviados
     if (!name || !client || !entity || !status) {
@@ -31,9 +31,10 @@ export async function POST(req: NextRequest) {
     const createdAt = new Date().toISOString().slice(0, 19).replace("T", " ")
 
     try {
+        // Inserir o projeto, agora com os novos campos
         await db.execute(
-            "INSERT INTO projects (id, name, description, client, entity, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [id, name, description, client, entity, status, createdAt]
+            "INSERT INTO projects (id, name, description, client, entity, status, initDate, completeDate, membersTeam, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [id, name, description, client, entity, status, initDate, completeDate, JSON.stringify(membersTeam), createdAt]
         )
 
         return NextResponse.json({ success: true, message: "Projeto criado com sucesso", id })
