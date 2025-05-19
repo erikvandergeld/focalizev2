@@ -24,7 +24,6 @@ function formatToMySQLDateTime(date: string): string {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
-
 // Função para verificar se o usuário pode editar a tarefa (somente quem a criou pode alterar o status)
 const canEditTask = (decoded: any, taskCreatorId: string) => {
   return decoded.id === taskCreatorId;
@@ -53,7 +52,7 @@ export async function POST(req: NextRequest) {
   const createdAt = new Date().toISOString().slice(0, 19).replace("T", " ");
 
   try {
-    // Usando safeQuery para a inserção da tarefa
+    // Inserção da tarefa na tabela 'tasks'
     await safeQuery(
       `INSERT INTO tasks 
         (id, title, description, client, assignee, status, taskType, entity, project, tags, createdAt) 
@@ -73,11 +72,38 @@ export async function POST(req: NextRequest) {
       ]
     );
 
+    // Se a tarefa foi associada a tags, insira na tabela 'task_tags'
     if (Array.isArray(tags) && tags.length > 0) {
       const tagInserts = tags.map((tagId: string) =>
         safeQuery("INSERT INTO task_tags (taskId, tagId) VALUES (?, ?)", [taskId, tagId])
       );
       await Promise.all(tagInserts);
+    }
+
+    // Se um projeto foi fornecido, atualizar o campo 'activeTasks' na tabela 'projects'
+    if (project) {
+      // Verifica se o projeto existe
+      const projectExists = await safeQuery(
+        "SELECT id, activeTasks FROM projects WHERE id = ?",
+        [project]
+      );
+
+      if (projectExists.length === 0) {
+        return NextResponse.json({ success: false, message: "Projeto não encontrado." }, { status: 404 });
+      }
+
+      // Se o campo activeTasks for NULL ou vazio, inicializa com um array vazio
+      const currentActiveTasks = projectExists[0].activeTasks ? JSON.parse(projectExists[0].activeTasks) : [];
+
+      // Atualiza o campo 'activeTasks' do projeto com o ID da tarefa criada
+      const updatedActiveTasks = [...currentActiveTasks, taskId];
+
+      const result = await safeQuery(
+        "UPDATE projects SET activeTasks = ? WHERE id = ?",
+        [JSON.stringify(updatedActiveTasks), project]
+      );
+
+      console.log("Resultado da atualização do projeto:", result);
     }
 
     return NextResponse.json({ success: true, message: "Tarefa criada com sucesso." });
@@ -168,64 +194,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Nenhuma tarefa encontrada." }, { status: 404 });
     }
 
-    const alreadyArchivedTaskIds = new Set<string>();  // Para armazenar os IDs das tarefas arquivadas
-
-    // Atualizar tarefas com status "completed" e verificando o tempo desde a conclusão
-    const now = new Date(); // Obtém a data e hora atuais em UTC
-    const updatedTasks = filteredTasks.map((task: any) => {
-      // Ignora as tarefas que já estão arquivadas
-      if (task.status === "archived") {
-        console.log(`Tarefa task-${task.id} já está arquivada, ignorando.`);
-        alreadyArchivedTaskIds.add(task.id);  // Adiciona o ID ao conjunto de tarefas arquivadas
-        return task; // Retorna a tarefa sem alterações se já estiver arquivada
-      }
-
-      if (task.status === "completed" && task.completedAt) {
-        // Converte a data "completedAt" para o formato Date (ISO 8601)
-        let completedDate = new Date(task.completedAt);  // A data de conclusão já está no formato ISO
-        completedDate.setHours(completedDate.getHours() - 3);  // Subtrai 3 horas (ajustando o fuso horário)
-
-        const secondsSinceCompletion = (now.getTime() - completedDate.getTime()) / 1000; // Tempo em segundos
-
-        // Debug: Verificar os valores das datas
-        // console.log(`tarefas/route.ts  Tarefa ${task.id} completada em: ${completedDate.toISOString()}`);
-        // console.log(`tarefas/route.ts  Segundos desde a conclusão: ${secondsSinceCompletion}`);
-
-        // Se a tarefa foi concluída há mais de 48 horas (172,800 segundos), alteramos o status para "archived"
-        if (secondsSinceCompletion >= 172800 && !task.archivedAt) { // 48 horas em segundos
-          task.status = "archived";  // Altera o status para "archived"
-          task.archivedAt = formatToMySQLDateTime(now.toISOString());  // Converte a data para o formato correto
-          // console.log(`tarefas/route.ts  Tarefa ${task.id} foi arquivada devido ao tempo de conclusão.`);
-        }
-      }
-      return task;
-    });
-
-    // Atualizar o banco de dados para refletir as alterações no status
-    const updatedArchivedTasks = updatedTasks.filter((task: any) => task.status === "archived" && task.archivedAt);
-    
-    // Evitar que repasse as tarefas já arquivadas
-    for (const task of updatedArchivedTasks) {
-      if (alreadyArchivedTaskIds.has(task.id)) {
-        // console.log(`tarefas/route.ts Tarefa task-${task.id} já foi arquivada, ignorando a atualização.`);
-        continue;  // Se a tarefa já foi arquivada, ignora a atualização
-      }
-
-      try {
-        // Atualiza o status da tarefa para "archived" no banco de dados
-        await db.execute(
-          `UPDATE tasks SET status = ?, archivedAt = ? WHERE id = ?`,
-          [task.status, task.archivedAt, task.id]
-        );
-        // console.log(`Tarefa ${task.id} foi arquivada no banco.`);
-      } catch (error) {
-        console.error(`Erro ao atualizar a tarefa ${task.id} para arquivada:`, error);
-      }
-    }
-
-    // console.log(`Tarefas atualizadas: ${updatedArchivedTasks.length} tarefas foram arquivadas`);
-
-    const taskIds = updatedTasks.map((task: any) => task.id);
+    // Agora, vamos apenas retornar as tarefas sem realizar nenhuma mudança
+    const taskIds = filteredTasks.map((task: any) => task.id);
 
     // Consultar as tags associadas às tarefas filtradas
     const [tags]: any = await safeQuery(`
@@ -253,7 +223,7 @@ export async function GET(req: NextRequest) {
         c.task_id
       FROM comments c
       WHERE c.task_id IN (?) 
-      ORDER BY c.created_at DESC`, [updatedTasks.map((task: any) => task.id)]);
+      ORDER BY c.created_at DESC`, [taskIds]);
 
     // Agrupar os comentários por tarefa
     const commentsMap: Record<string, any[]> = {};
@@ -274,7 +244,7 @@ export async function GET(req: NextRequest) {
       SELECT 
         a.id, a.task_id, a.file_name AS name, a.file_url AS url
       FROM anexos a
-      WHERE a.task_id IN (?)`, [updatedTasks.map((task: any) => task.id)]);
+      WHERE a.task_id IN (?)`, [taskIds]);
 
     // Agrupar anexos por tarefa
     const attachmentsMap: Record<string, any[]> = {};
@@ -289,7 +259,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const tasksWithTagsCommentsAndAttachments = updatedTasks.map((task: any) => ({
+    const tasksWithTagsCommentsAndAttachments = filteredTasks.map((task: any) => ({
       ...task,
       tags: tagsMap[task.id] || [],
       comments: commentsMap[task.id] || [],

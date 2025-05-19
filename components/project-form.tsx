@@ -6,10 +6,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 import { useNotifications } from "./notification-provider"
 import { useAuth } from "./auth-provider"
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select"
 
 interface ProjectFormProps {
   projectId?: string
@@ -21,6 +27,11 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
   const [client, setClient] = useState("")
   const [entity, setEntity] = useState("")
   const [status, setStatus] = useState("pending")
+  const [initDate, setInitDate] = useState<string>("")
+  const [completeDate, setCompleteDate] = useState<string>("")
+  const [membersTeam, setMembersTeam] = useState<string[]>([]) // Inicializa como um array vazio
+  const [searchQuery, setSearchQuery] = useState("") // Estado para pesquisa
+  const [filteredUsers, setFilteredUsers] = useState<{ id: string, firstName: string, lastName: string }[]>([]) // Usuários filtrados com base na pesquisa
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingData, setIsLoadingData] = useState(!!projectId)
   const router = useRouter()
@@ -30,8 +41,9 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
 
   const [availableClients, setAvailableClients] = useState<{ id: string; name: string; entities: string[] }[]>([])
   const [availableEntities, setAvailableEntities] = useState<{ id: string; name: string }[]>([])
+  const [availableUsers, setAvailableUsers] = useState<{ id: string; firstName: string; lastName: string }[]>([])  // Agora com firstName e lastName
 
-  // 1. Carregar listas de Entidades e Clientes
+  // 1. Carregar listas de Entidades, Clientes e Usuários
   useEffect(() => {
     const loadData = async () => {
       const token = localStorage.getItem("token")
@@ -47,6 +59,11 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
         const responseClients = await fetch("/api/clientes", { headers })
         const clientesData = await responseClients.json()
         setAvailableClients(clientesData.clientes)
+
+        const responseUsers = await fetch("/api/usuarios", { headers })  // Assumindo que exista uma API para usuários
+        const usersData = await responseUsers.json()
+        setAvailableUsers(usersData.usuarios)
+
       } catch (error) {
         console.error("Erro ao carregar dados:", error)
         toast({
@@ -84,6 +101,9 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
           setClient(project.client)
           setEntity(project.entity)
           setStatus(project.status)
+          setInitDate(project.initDate || "")
+          setCompleteDate(project.completeDate || "")
+          setMembersTeam(project.membersTeam || [])
 
         } catch (error) {
           toast({
@@ -103,7 +123,27 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
   // Filtrar clientes com base na entidade selecionada
   const filteredClients = entity ? availableClients.filter((c) => c.entities.includes(entity)) : availableClients
 
-  // 3. Função para salvar ou atualizar o projeto
+  // Função para lidar com a seleção de membros da equipe
+  const handleMemberChange = (id: string) => {
+    setMembersTeam((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((memberId) => memberId !== id) // Remove o membro da seleção
+      } else {
+        return [...prev, id] // Adiciona o membro à seleção
+      }
+    })
+  }
+
+  // 3. Função para filtrar usuários com base na pesquisa
+  useEffect(() => {
+    const lowerCaseQuery = searchQuery.toLowerCase()
+    const filtered = availableUsers.filter((user) =>
+      `${user.firstName} ${user.lastName}`.toLowerCase().includes(lowerCaseQuery)
+    )
+    setFilteredUsers(filtered)
+  }, [searchQuery, availableUsers])
+
+  // 4. Função para salvar ou atualizar o projeto
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -118,18 +158,23 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
         Authorization: `Bearer ${token}`,
       }
 
+      const projectData = {
+        name,
+        description,
+        client,
+        entity,
+        status,
+        initDate,
+        completeDate,
+        membersTeam,
+      }
+
       if (projectId) {
         // Se existe projectId, significa que é uma atualização (PUT)
         const response = await fetch(`/api/projetos/${projectId}`, {
           method: "PUT",
           headers,
-          body: JSON.stringify({
-            name,
-            description,
-            client,
-            entity,
-            status,
-          }),
+          body: JSON.stringify(projectData),
         })
 
         const data = await response.json()
@@ -155,13 +200,7 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
         const response = await fetch("/api/projetos", {
           method: "POST",
           headers,
-          body: JSON.stringify({
-            name,
-            description,
-            client,
-            entity,
-            status,
-          }),
+          body: JSON.stringify(projectData),
         })
 
         const data = await response.json()
@@ -217,13 +256,34 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
         </div>
 
         <div className="grid gap-2">
+          <Label htmlFor="initDate">Data de Início</Label>
+          <Input
+            type="date"
+            id="initDate"
+            value={initDate}
+            onChange={(e) => setInitDate(e.target.value)}
+            required
+          />
+        </div>
+
+        <div className="grid gap-2">
+          <Label htmlFor="completeDate">Data de Conclusão</Label>
+          <Input
+            type="date"
+            id="completeDate"
+            value={completeDate}
+            onChange={(e) => setCompleteDate(e.target.value)}
+            required
+          />
+        </div>
+
+        <div className="grid gap-2">
           <Label htmlFor="entity">Entidade Responsável</Label>
           <Select
             value={entity}
             onValueChange={(value) => {
               setEntity(value)
-              // Resetar cliente quando a entidade muda
-              setClient("")
+              setClient("") // Resetar cliente quando a entidade muda
             }}
             required
           >
@@ -239,7 +299,7 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
                 ))
               ) : (
                 <div className="px-2 py-2 text-sm text-muted-foreground">
-                  Nenhuma entidade disponível. Adicione entidades nas configurações.
+                  Nenhuma entidade disponível.
                 </div>
               )}
             </SelectContent>
@@ -261,7 +321,7 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
                 ))
               ) : (
                 <div className="px-2 py-2 text-sm text-muted-foreground">
-                  Nenhum cliente disponível. Adicione clientes primeiro.
+                  Nenhum cliente disponível.
                 </div>
               )}
             </SelectContent>
@@ -280,6 +340,38 @@ export function ProjectForm({ projectId }: ProjectFormProps) {
               <SelectItem value="completed">Finalizado</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="grid gap-2">
+          <Label htmlFor="membersTeam">Membros da Equipe</Label>
+          <div>
+            {/* Campo de pesquisa para filtrar membros da equipe */}
+            <Input
+              placeholder="Pesquisar membros..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {/* Lista de membros filtrados */}
+            <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+              {filteredUsers.length > 0 ? (
+                filteredUsers.map((user) => (
+                  <div key={user.id} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id={user.id}
+                      checked={membersTeam.includes(user.id)}
+                      onChange={() => handleMemberChange(user.id)}
+                    />
+                    <label htmlFor={user.id}>{user.firstName} {user.lastName}</label>
+                  </div>
+                ))
+              ) : (
+                <div className="px-2 py-2 text-sm text-muted-foreground">
+                  Nenhum membro encontrado.
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 

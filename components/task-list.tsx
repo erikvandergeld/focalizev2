@@ -70,27 +70,107 @@ export function TaskList({ projectId }: { projectId?: string }) {
     setDeleteDialogOpen(true)
   }
 
-  // Função para adicionar um comentário
-  const handleAddComment = (taskId: string, commentText: string) => {
+  const handleAddComment = async (taskId: string, commentText: string) => {
+    if (!user) {
+      addNotification("Erro", "Você precisa estar logado para adicionar um comentário.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+    // Capturar menções no comentário
+    const mentionRegex = /@([a-zA-Z0-9_]+)/g;
+    const extractMentions = (text: string) => {
+      const matches = text.match(mentionRegex);
+      return matches ? matches.map((match) => match.substring(1).trim()) : [];
+    };
+
+    const extractedMentions = extractMentions(commentText);
+    console.log("Menções capturadas:", extractedMentions);
+
+    let mentionedUserIds: string[] = [];
+
+    try {
+      // Buscar os usuários mencionados
+      const responseUsers = await fetch("/api/usuarios", { headers });
+      const dataUsers = await responseUsers.json();
+      if (responseUsers.ok && dataUsers.success) {
+        const users = dataUsers.usuarios || [];
+
+        mentionedUserIds = users
+          .filter((user: any) =>
+            extractedMentions.some(
+              (mention) =>
+                mention.toLowerCase() === user.firstName.toLowerCase() ||
+                mention.toLowerCase() === `${user.firstName.toLowerCase()} ${user.lastName.toLowerCase()}`
+            )
+          )
+          .map((user: any) => user.id);
+
+        console.log("Usuários mencionados identificados (antes do filtro):", mentionedUserIds);
+
+        // ✅ Remover o próprio usuário (quem fez o comentário)
+        mentionedUserIds = mentionedUserIds.filter((id) => id !== user.id);
+        console.log("Usuários mencionados (após remover o autor):", mentionedUserIds);
+      }
+    } catch (error) {
+      console.error("Erro ao buscar usuários mencionados:", error);
+    }
+
+    // Criação do comentário localmente
     const newComment: Comment = {
       id: `comment-${Date.now()}`,
       text: commentText,
-      author: "Usuário Teste", // Em um sistema real, seria o usuário logado
+      author: user.name,
       createdAt: new Date(),
-    }
+    };
 
-    const updatedTasks = taskList.map((task) => {
-      if (task.id === taskId) {
-        return {
-          ...task,
-          comments: [newComment, ...task.comments],
-        }
+    try {
+      // Enviar o comentário para o backend com as menções
+      const response = await fetch(`/api/tarefas/${taskId}/comentarios`, {
+        method: "POST",
+        headers: headers,
+        body: JSON.stringify({
+          text: commentText,
+          author: user.name,
+          mentionedUserIds,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Erro ao adicionar comentário.");
       }
-      return task
-    })
 
-    setTaskList(updatedTasks)
-  }
+
+      // ✅ Atualizar a lista de comentários no diálogo diretamente
+      setSelectedTask((prevTask: any) => {
+        if (prevTask && prevTask.id === taskId) {
+          return {
+            ...prevTask,
+            comments: [newComment, ...prevTask.comments],
+          };
+        }
+        return prevTask;
+      });
+
+      // ✅ Notificar apenas os usuários mencionados (excluindo o autor)
+      if (mentionedUserIds.length > 0) {
+        addNotification(
+          "Você foi mencionado!",
+          `Você foi mencionado em um comentário na tarefa "${taskId}".`,
+          mentionedUserIds
+        );
+      }
+
+      addNotification("Comentário adicionado", `Seu comentário foi adicionado à tarefa.`);
+    } catch (error) {
+      console.error("Erro ao adicionar comentário:", error);
+      addNotification("Erro ao adicionar comentário", "Não foi possível adicionar o comentário.");
+    }
+  };
 
   // const handleSaveTask = async (taskId: string, updatedTask: any) => {
   //   console.log("Atualizando tarefa:", taskId, updatedTask);  // Log para depuração
@@ -154,20 +234,19 @@ export function TaskList({ projectId }: { projectId?: string }) {
 
       // Atualiza a lista local removendo a tarefa
       const updatedTasks = taskList.filter((task) => task.id !== selectedTask.id)
-    
+
       setTaskList(updatedTasks)
 
       addNotification("Tarefa excluída", `A tarefa "${selectedTask.title}" foi excluída do sistema pelo usuário ${user?.name} com sucesso.`)
-      
+
       setDeleteDialogOpen(false)
-      
+
       setSelectedTask(null)
     } catch (error) {
       console.error("Erro ao excluir tarefa:", error)
       addNotification("Erro ao excluir tarefa", "Não foi possível excluir a tarefa. Tente novamente.")
     }
   }
-
 
   return (
     <>

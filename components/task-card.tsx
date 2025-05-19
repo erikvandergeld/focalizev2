@@ -62,7 +62,7 @@ export function TaskCard({ task, projectId }: TaskCardProps) {
       toast({
         title: "Erro",
         description: "Ocorreu um erro ao excluir a tarefa.",
-        variant: "destructive",
+        variant: "destructive", 
       })
     }
   }

@@ -554,91 +554,91 @@ export function KanbanBoard() {
   }, [addNotification]);
   
 
-  const archiveTasksAuto = useCallback(() => {
-    if (!isMountedRef.current) return;
+  // const archiveTasksAuto = useCallback(() => {
+  //   if (!isMountedRef.current) return;
 
-    const now = new Date();
-    const tasksToArchive: { id: string; title: string }[] = [];
+  //   const now = new Date();
+  //   const tasksToArchive: { id: string; title: string }[] = [];
 
-    setData((prevData) => {
-      const updatedColumns = prevData.columns.map((column) => {
-        if (column.id !== "completed") return column; // Só verificamos tarefas completadas
+  //   setData((prevData) => {
+  //     const updatedColumns = prevData.columns.map((column) => {
+  //       if (column.id !== "completed") return column; // Só verificamos tarefas completadas
 
-        const updatedTasks = column.tasks.filter((task) => {
-          if (!task.completedAt || task.archivedAt) return true; // Se não estiver concluída ou já foi arquivada, mantém a tarefa
+  //       const updatedTasks = column.tasks.filter((task) => {
+  //         if (!task.completedAt || task.archivedAt) return true; // Se não estiver concluída ou já foi arquivada, mantém a tarefa
 
-          const completedDate = new Date(task.completedAt);
-          const secondsSinceCompletion = (now.getTime() - completedDate.getTime()) / 1000; // Tempo em segundos
+  //         const completedDate = new Date(task.completedAt);
+  //         const secondsSinceCompletion = (now.getTime() - completedDate.getTime()) / 1000; // Tempo em segundos
 
-          if (secondsSinceCompletion >= 10) {
-            tasksToArchive.push({ id: task.id, title: task.title });
+  //         if (secondsSinceCompletion >= 10) {
+  //           tasksToArchive.push({ id: task.id, title: task.title });
 
-            // Arquivar a tarefa
-            const updatedTask: Task = {
-              ...task,
-              status: "archived",
-              archivedAt: now.toISOString(), // Atualiza a data de arquivamento
-            };
+  //           // Arquivar a tarefa
+  //           const updatedTask: Task = {
+  //             ...task,
+  //             status: "archived",
+  //             archivedAt: now.toISOString(), // Atualiza a data de arquivamento
+  //           };
 
-            // Atualizando o estado local com a tarefa arquivada
-            setData((prevData) => {
-              const updatedColumns = prevData.columns.map((col) => {
-                if (col.id === column.id) {
-                  return {
-                    ...col,
-                    tasks: col.tasks.map((t) =>
-                      t.id === task.id ? updatedTask : t
-                    ),
-                  };
-                }
-                return col;
-              });
+  //           // Atualizando o estado local com a tarefa arquivada
+  //           setData((prevData) => {
+  //             const updatedColumns = prevData.columns.map((col) => {
+  //               if (col.id === column.id) {
+  //                 return {
+  //                   ...col,
+  //                   tasks: col.tasks.map((t) =>
+  //                     t.id === task.id ? updatedTask : t
+  //                   ),
+  //                 };
+  //               }
+  //               return col;
+  //             });
 
-              return { columns: updatedColumns };
-            });
+  //             return { columns: updatedColumns };
+  //           });
 
-            // Retorna false para remover a tarefa da lista de "completadas"
-            return false;
-          }
+  //           // Retorna false para remover a tarefa da lista de "completadas"
+  //           return false;
+  //         }
 
-          return true;
-        });
+  //         return true;
+  //       });
 
-        return {
-          ...column,
-          tasks: updatedTasks, // Atualiza a coluna com as tarefas filtradas
-        };
-      });
+  //       return {
+  //         ...column,
+  //         tasks: updatedTasks, // Atualiza a coluna com as tarefas filtradas
+  //       };
+  //     });
 
-      return { columns: updatedColumns };
-    });
+  //     return { columns: updatedColumns };
+  //   });
 
-    // Enviar notificações após a atualização do estado local
-    if (tasksToArchive.length > 0 && isMountedRef.current) {
-      const timer = setTimeout(() => {
-        if (!isMountedRef.current) return;
+  //   // Enviar notificações após a atualização do estado local
+  //   if (tasksToArchive.length > 0 && isMountedRef.current) {
+  //     const timer = setTimeout(() => {
+  //       if (!isMountedRef.current) return;
 
-        tasksToArchive.forEach((task) => {
-          addNotification(
-            "Tarefa arquivada automaticamente",
-            `A tarefa "${task.title}" foi arquivada automaticamente após 10 segundos de conclusão.`
-          );
-        });
-      }, 0);
+  //       tasksToArchive.forEach((task) => {
+  //         addNotification(
+  //           "Tarefa arquivada automaticamente",
+  //           `A tarefa "${task.title}" foi arquivada automaticamente após 10 segundos de conclusão.`
+  //         );
+  //       });
+  //     }, 0);
 
-      return () => clearTimeout(timer);
-    }
-  }, [addNotification]);
+  //     return () => clearTimeout(timer);
+  //   }
+  // }, [addNotification]);
 
 
-  useEffect(() => {
-    // Chama a função de arquivamento a cada 10 segundos (apenas para fins de teste)
-    const intervalId = setInterval(() => {
-      archiveTasksAuto();
-    }, 10000); // 10000 ms = 10 segundos
+  // useEffect(() => {
+  //   // Chama a função de arquivamento a cada 10 segundos (apenas para fins de teste)
+  //   const intervalId = setInterval(() => {
+  //     archiveTasksAuto();
+  //   }, 10000); // 10000 ms = 10 segundos
   
-    return () => clearInterval(intervalId); // Limpa o intervalo ao desmontar o componente
-  }, [archiveTasksAuto]); // A função archiveTasksAuto é chamada a cada 10 segundos
+  //   return () => clearInterval(intervalId); // Limpa o intervalo ao desmontar o componente
+  // }, [archiveTasksAuto]); // A função archiveTasksAuto é chamada a cada 10 segundos
   
 
   // Função para lidar com mudanças nos filtros
@@ -722,46 +722,88 @@ export function KanbanBoard() {
     setArchiveDialogOpen(true)
   }, [])
 
-
   const handleAddComment = async (taskId: string, commentText: string) => {
     if (!user) {
       addNotification("Erro", "Você precisa estar logado para adicionar um comentário.");
       return;
     }
-
+  
     const token = localStorage.getItem("token");
     const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-
+  
+    // Capturar menções no comentário
+    const mentionRegex = /@([a-zA-Z0-9_]+)/g;
+    const extractMentions = (text: string) => {
+      const matches = text.match(mentionRegex);
+      return matches ? matches.map((match) => match.substring(1).trim()) : [];
+    };
+  
+    const extractedMentions = extractMentions(commentText);
+    console.log("Menções capturadas:", extractedMentions);
+  
+    let mentionedUserIds: string[] = [];
+  
+    try {
+      // Buscar os usuários mencionados
+      const responseUsers = await fetch("/api/usuarios", { headers });
+      const dataUsers = await responseUsers.json();
+      if (responseUsers.ok && dataUsers.success) {
+        const users = dataUsers.usuarios || [];
+  
+        mentionedUserIds = users
+          .filter((user: any) =>
+            extractedMentions.some(
+              (mention) =>
+                mention.toLowerCase() === user.firstName.toLowerCase() ||
+                mention.toLowerCase() === `${user.firstName.toLowerCase()} ${user.lastName.toLowerCase()}`
+            )
+          )
+          .map((user: any) => user.id);
+  
+        console.log("Usuários mencionados identificados (antes do filtro):", mentionedUserIds);
+        
+        // ✅ Remover o próprio usuário (quem fez o comentário)
+        mentionedUserIds = mentionedUserIds.filter((id) => id !== user.id);
+        console.log("Usuários mencionados (após remover o autor):", mentionedUserIds);
+      }
+    } catch (error) {
+      console.error("Erro ao buscar usuários mencionados:", error);
+    }
+  
     // Criação do comentário localmente
     const newComment: Comment = {
-      id: `comment-${Date.now()}`, // Gerando um ID único para o comentário
+      id: `comment-${Date.now()}`,
       text: commentText,
-      author: user.name, // Usando o nome do usuário logado
+      author: user.name,
       createdAt: new Date(),
     };
-
+  
     try {
-      // Enviar o comentário para o backend
+      // Enviar o comentário para o backend com as menções
       const response = await fetch(`/api/tarefas/${taskId}/comentarios`, {
         method: "POST",
         headers: headers,
-        body: JSON.stringify({ text: commentText, author: user.name }), // Usando o ID do usuário logado
+        body: JSON.stringify({
+          text: commentText,
+          author: user.name,
+          mentionedUserIds,
+        }),
       });
-
+  
       const data = await response.json();
-
+  
       if (!response.ok || !data.success) {
         throw new Error(data.message || "Erro ao adicionar comentário.");
       }
-
-      // Atualizar localmente a lista de tarefas com o novo comentário
+  
+      // ✅ Atualizar localmente a lista de tarefas com o novo comentário
       setData((prevData) => {
         const updatedColumns = prevData.columns.map((column) => {
           const updatedTasks = column.tasks.map((task) => {
             if (task.id === taskId) {
               return {
                 ...task,
-                comments: [newComment, ...task.comments], // Adicionando o novo comentário na lista de comentários da tarefa
+                comments: [newComment, ...task.comments],
               };
             }
             return task;
@@ -770,8 +812,8 @@ export function KanbanBoard() {
         });
         return { columns: updatedColumns };
       });
-
-      // Atualizar a lista de comentários no componente pai (passando para o Dialog)
+  
+      // ✅ Atualizar a lista de comentários no diálogo diretamente
       setSelectedTask((prevTask) => {
         if (prevTask && prevTask.id === taskId) {
           return {
@@ -781,13 +823,24 @@ export function KanbanBoard() {
         }
         return prevTask;
       });
-
+  
+      // ✅ Notificar apenas os usuários mencionados (excluindo o autor)
+      if (mentionedUserIds.length > 0) {
+        addNotification(
+          "Você foi mencionado!",
+          `Você foi mencionado em um comentário na tarefa "${taskId}".`,
+          mentionedUserIds
+        );
+      }
+  
+      addNotification("Comentário adicionado", `Seu comentário foi adicionado à tarefa.`);
     } catch (error) {
       console.error("Erro ao adicionar comentário:", error);
       addNotification("Erro ao adicionar comentário", "Não foi possível adicionar o comentário.");
     }
   };
 
+  
   const handleSaveTask = async (taskId: string, updatedTask: any) => {
     if (!user) {
       addNotification("Erro", "Você precisa estar logado para atualizar a tarefa.")

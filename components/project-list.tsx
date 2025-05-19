@@ -86,24 +86,56 @@ export function ProjectList() {
     setDeleteDialogOpen(true)
   }
 
-  const handleDeleteProject = () => {
-    if (!selectedProject) return
-
-    setProjectList((prev) => prev.filter((project) => project.id !== selectedProject.id))
-
-    toast({
-      title: "Projeto excluído",
-      description: `O projeto "${selectedProject.name}" foi excluído com sucesso.`,
-    })
-
-    addNotification(
-      "Projeto excluído",
-      `O projeto "${selectedProject.name}" foi removido.`,
-    )
-
-    setDeleteDialogOpen(false)
-    setSelectedProject(null)
-  }
+  const handleDeleteProject = async () => {
+    if (!selectedProject) return;
+  
+    // Envia a requisição DELETE para o servidor
+    try {
+      const response = await fetch(`/api/projetos/${selectedProject.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,  // Inclui o token no cabeçalho para autenticação
+        },
+      });
+  
+      const data = await response.json();
+  
+      // Verifica se a exclusão foi bem-sucedida
+      if (data.success) {
+        // Atualiza a lista de projetos removendo o projeto excluído
+        setProjectList((prev) => prev.filter((project) => project.id !== selectedProject.id));
+  
+        toast({
+          title: "Projeto excluído",
+          description: `O projeto "${selectedProject.name}" foi excluído com sucesso.`,
+        });
+  
+        addNotification(
+          "Projeto excluído",
+          `O projeto "${selectedProject.name}" foi removido.`,
+        );
+  
+        // Fecha o diálogo de exclusão e limpa a seleção
+        setDeleteDialogOpen(false);
+        setSelectedProject(null);
+      } else {
+        // Caso a exclusão não tenha sido bem-sucedida
+        toast({
+          title: "Erro ao excluir projeto",
+          description: data.message || "Não foi possível excluir o projeto.",
+          variant: 'destructive', // Variável para mostrar o erro
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao excluir projeto:", error);
+      toast({
+        title: "Erro ao excluir projeto",
+        description: "Ocorreu um erro ao tentar excluir o projeto.",
+        variant: 'destructive',
+      });
+    }
+  };  
 
   return (
     <>
